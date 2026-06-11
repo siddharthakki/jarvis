@@ -28,9 +28,11 @@ class TTSService {
             .replace(/\s+/g, ' ') // Normalize spaces
             .trim();
         if (strippedText) {
-            // Stop any current speech before starting new one to prevent overlap
             this.stop();
-            say_1.default.speak(strippedText);
+            say_1.default.speak(strippedText, undefined, 1.0, () => {
+                if (this.onEnd)
+                    this.onEnd();
+            });
         }
     }
     stop() {

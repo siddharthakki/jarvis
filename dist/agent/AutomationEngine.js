@@ -7,6 +7,7 @@ const ApprovalFlow_1 = require("../policy/ApprovalFlow");
 const ContextManager_1 = require("./ContextManager");
 class AutomationEngine {
     constructor(toolExecutor, policyEngine, approvalFlow, contextManager) {
+        this.toolCallCount = 0;
         this.toolExecutor = toolExecutor || new ToolExecutor_1.ToolExecutor();
         this.policyEngine = policyEngine || new PolicyEngine_1.PolicyEngine();
         this.approvalFlow = approvalFlow || new ApprovalFlow_1.ApprovalFlow();
@@ -16,6 +17,13 @@ class AutomationEngine {
      * Execute a single automation step
      */
     async executeStep(step, context) {
+        if (this.toolCallCount >= AutomationEngine.MAX_TOOL_CALLS) {
+            return {
+                success: false,
+                error: "Tool call limit reached. I attempted too many steps without completing.",
+                stepsCompleted: this.toolCallCount
+            };
+        }
         // Get current context
         const currentContext = context || {};
         // Merge context with step arguments
@@ -39,10 +47,21 @@ class AutomationEngine {
      * Execute a workflow with multiple steps
      */
     async executeWorkflow(workflow) {
+        this.toolCallCount = 0;
         const results = [];
         let context = workflow.context || {};
         try {
             for (const step of workflow.steps) {
+                if (this.toolCallCount >= AutomationEngine.MAX_TOOL_CALLS) {
+                    return {
+                        success: false,
+                        error: "Tool call limit reached. I attempted too many steps without completing. Here is what I accomplished so far:",
+                        partialResults: results,
+                        stepsCompleted: this.toolCallCount,
+                        stepsTotal: workflow.steps.length
+                    };
+                }
+                this.toolCallCount++;
                 // Execute the current step
                 const result = await this.executeStep(step, context);
                 // Store result in context for potential chaining
@@ -142,3 +161,4 @@ class AutomationEngine {
     }
 }
 exports.AutomationEngine = AutomationEngine;
+AutomationEngine.MAX_TOOL_CALLS = 10;

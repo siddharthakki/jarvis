@@ -62,6 +62,7 @@ require("./tools/calendarTools");
 require("./tools/knowledgeTools");
 require("./tools/imageTools");
 require("./tools/ollamaTools");
+require("./tools/computerControlTools");
 let mainWindow = null;
 let agentRuntime = null;
 let pythonProcess = null;

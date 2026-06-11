@@ -25,11 +25,14 @@ export class TTSService {
       .trim();
 
     if (strippedText) {
-      // Stop any current speech before starting new one to prevent overlap
       this.stop();
-      say.speak(strippedText);
+      say.speak(strippedText, undefined, 1.0, () => {
+        if (this.onEnd) this.onEnd();
+      });
     }
   }
+
+  onEnd?: () => void;
 
   stop(): void {
     try {

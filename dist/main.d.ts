@@ -12,3 +12,4 @@ import './tools/calendarTools';
 import './tools/knowledgeTools';
 import './tools/imageTools';
 import './tools/ollamaTools';
+import './tools/computerControlTools';

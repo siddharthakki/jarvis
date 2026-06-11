@@ -16,6 +16,8 @@ export interface Workflow {
     context?: Record<string, any>;
 }
 export declare class AutomationEngine {
+    private static readonly MAX_TOOL_CALLS;
+    private toolCallCount;
     private toolExecutor;
     private policyEngine;
     private approvalFlow;

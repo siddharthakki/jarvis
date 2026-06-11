@@ -27,6 +27,7 @@ exports.MainWindow = void 0;
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const TTSService_1 = require("../services/TTSService");
+const Config_1 = require("../config/Config");
 class MainWindow {
     constructor() {
         this.window = null;
@@ -65,6 +66,10 @@ class MainWindow {
             console.log('Window closed.');
             this.window = null;
         });
+        // Grant microphone permission so Web Speech API works in Electron
+        win.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+            callback(permission === 'media');
+        });
         win.webContents.on('did-finish-load', () => {
             console.log('JARVIS HUD loaded successfully.');
             this.checkOllamaStatus();
@@ -88,7 +93,8 @@ class MainWindow {
         electron_1.ipcMain.on('voice-input', (event, transcript) => {
             // Silence JARVIS immediately if new input is received
             TTSService_1.ttsService.stop();
-            if (!this.agentRuntime || !transcript)
+            const cleanTranscript = transcript?.trim();
+            if (!this.agentRuntime || !cleanTranscript || cleanTranscript.length < 2)
                 return;
             const TIMEOUT_MS = 150000; // 2.5 min — covers worst-case 14B model generation
             let settled = false;
@@ -133,6 +139,29 @@ class MainWindow {
         electron_1.ipcMain.on('stop-speech', () => {
             TTSService_1.ttsService.stop();
         });
+        electron_1.ipcMain.handle('jarvis:set-config', (_, key, value) => {
+            Config_1.Config.getInstance().set(key, value);
+            return true;
+        });
+        electron_1.ipcMain.handle('jarvis:get-config', () => {
+            return Config_1.Config.getInstance().getAll();
+        });
+        electron_1.ipcMain.handle('jarvis:get-ollama-models', async () => {
+            const { execFile } = require('child_process');
+            return new Promise((resolve) => {
+                execFile('ollama', ['list'], (err, stdout) => {
+                    if (err) {
+                        resolve([]);
+                        return;
+                    }
+                    const models = stdout.split('\n')
+                        .slice(1)
+                        .map((line) => line.split(/\s+/)[0])
+                        .filter((name) => name && !name.includes('NAME'));
+                    resolve(models);
+                });
+            });
+        });
     }
     setAgentRuntime(agentRuntime) {
         this.agentRuntime = agentRuntime;
@@ -141,6 +170,11 @@ class MainWindow {
         });
         agentRuntime.setSpeakCallback((text) => {
             TTSService_1.ttsService.stop();
+            // Estimate mute duration: ~13 chars/sec + 2s tail buffer
+            const wordCount = text.trim().split(/\s+/).length;
+            const estimatedMs = Math.max(3000, (wordCount / 2.5) * 1000 + 2000);
+            this.window?.webContents.send('tts-start', estimatedMs);
+            TTSService_1.ttsService.onEnd = () => this.window?.webContents.send('tts-end');
             TTSService_1.ttsService.speak(text);
         });
     }

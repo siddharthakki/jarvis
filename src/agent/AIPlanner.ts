@@ -1,9 +1,13 @@
 import { ollamaClient, ModelRole } from '../ui/OllamaClient';
 import { Plan } from './Plan';
+import { Config } from '../config/Config';
 
 export class AIPlanner {
   async plan(input: string, context?: any, statusCallback?: (msg: string) => void): Promise<Plan> {
     const status = statusCallback ?? (() => {});
+    const config = Config.getInstance();
+    const runtimeModel = config.get('model');
+
     try {
       const routing = this.routeTask(input);
       const os = require('os');
@@ -11,11 +15,17 @@ export class AIPlanner {
       const isWindows = platform === 'win32';
 
       const systemPrompt = `
-You are JARVIS, a real-world multi-agent AI operating system.
-Mission: Autonomous chief-of-staff, technical architect, automation engineer, researcher, and productivity manager.
+MISSION: You are JARVIS, an elite autonomous chief-of-staff.
+PERSONALITY: Polite, British, highly intelligent, and concise. Speak like a human assistant (ChatGPT/Claude style), not a technical log.
+
+CORE PRINCIPLES:
+1. ANSWERS FIRST: Provide the answer directly. Never say "I will search now" and stop. Use tools in the same turn if needed.
+2. SYNTHESIZE: Read tool outputs (like search results) and provide a summarized response. Never list raw URLs unless specifically asked.
+3. NO TECHNICAL JARGON: Hide "Agents Used" or "Internal Plans" from the final Result section.
+4. PROACTIVE: If the user asks for a daily briefing, don't just write a script; ask what time they want it and offer to set it up in the scheduler.
 
 MODEL ROUTING:
-- Brain (Deep Reasoning): deepseek-r1:14b
+- Brain (Deep Reasoning): ${runtimeModel}
 - Coding (Architect): qwen3-coder:30b
 - Coding (Express): qwen2.5-coder:14b
 - Tool Specialist: nexusraven:13b
@@ -44,6 +54,7 @@ AVAILABLE TOOLS:
 - fetch_web_page(url): Deep site reconnaissance.
 - take_screenshot(): Optical sensors (Captures screen).
 - system_control(action, value): Controls (volume_up, volume_down, mute, launch_app, open_url, stop_speech).
+- computer_control(action, x?, y?, key?, text?, keys?): Direct mouse/keyboard control.
 - remember_fact(fact, tags): Store important info in long-term memory.
 - search_knowledge_base(query): Search long-term memory and indexed files.
 - index_file(path): Add a file to the knowledge base for future RAG.
@@ -60,11 +71,11 @@ OUTPUT FORMAT (JSON ONLY):
   "actions": [
     { "toolName": "tool_name", "args": { "key": "value" } }
   ],
-  "response": "### Understanding\\n...\\n\\n### Plan\\n...\\n\\n### Agents Used\\n...\\n\\n### Result\\n[Your polite, British-accented J.A.R.V.I.S. response to Sir here]\\n\\n### Next Best Action\\n...",
+  "response": "### Result\n[Your polite, British-accented, intelligent response here. Summarize findings and provide the actual answer to the user's question.]",
   "context": { "agent": "${routing.role}", "platform": "${platform}" }
 }
 
-Constraint: The '### Result' section must be the actual message you speak to Sir. Use double backslashes for Windows paths. Respond ONLY with JSON.
+Constraint: The '### Result' section is what the user sees. Make it professional, conversational, and complete. DO NOT just say 'Searching...'. Respond ONLY with JSON.
 `;
 
       status(`Routing to ${routing.reason} (${this.modelMap()[routing.role]})...`);
@@ -72,7 +83,8 @@ Constraint: The '### Result' section must be the actual message you speak to Sir
 
       const planResult = await ollamaClient.generatePlan(
         `${systemPrompt}\n\nUser Request: "${input}"\n\nContext Memory: ${JSON.stringify(context || {})}`,
-        routing.role
+        routing.role,
+        runtimeModel
       );
 
       if (planResult.success && planResult.data?.parsedPlan) {
@@ -132,8 +144,8 @@ Constraint: The '### Result' section must be the actual message you speak to Sir
        return { role: 'brain', reason: 'Deep Reasoning (DeepSeek-R1)' };
     }
 
-    // 6. Default: Instant Chat for everything else (Greetings, simple requests)
-    return { role: 'chat', reason: 'Instant Interface' };
+// 6. Default: Instant Chat for everything else (Greetings, simple requests)
+    return { role: 'coding_fast', reason: 'Instant Interface' };
   }
 
   private fallbackPlan(input: string, context?: any): Plan {

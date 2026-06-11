@@ -8,11 +8,11 @@ export declare class OllamaClient {
     /**
      * Send a prompt to Ollama using a specific role-based model
      */
-    generatePlan(prompt: string, role?: ModelRole): Promise<ToolResult>;
+    generatePlan(prompt: string, role?: ModelRole, overrideModel?: string): Promise<ToolResult>;
     /**
      * Fallback method using curl CLI
      */
-    generatePlanCLI(prompt: string, role?: ModelRole): Promise<ToolResult>;
+    generatePlanCLI(prompt: string, role?: ModelRole, overrideModel?: string): Promise<ToolResult>;
     private parseGeneratedResponse;
     private robustJSONParse;
     private escapePrompt;

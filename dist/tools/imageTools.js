@@ -78,24 +78,49 @@ async function checkComfyStatus() {
 }
 async function generateWithComfy(prompt, status) {
     try {
-        // 0. Fetch available checkpoints to ensure validity
-        const infoRes = await fetch('http://127.0.0.1:8188/object_info/CheckpointLoaderSimple');
+        // 0. Intelligent Node Discovery & Model Selection
+        status?.('JARVIS: Analyzing ComfyUI object info for optimal workflow...');
+        const infoRes = await fetch('http://127.0.0.1:8188/object_info');
         const info = await infoRes.json();
-        const availableCkpts = info.CheckpointLoaderSimple.input.required.ckpt_name[0];
-        // Select best available: SDXL preferred, then first available
-        let selectedCkpt = availableCkpts.find((c) => c.toLowerCase().includes('xl')) || availableCkpts[0];
-        const isXL = selectedCkpt.toLowerCase().includes('xl');
-        status?.(`JARVIS: Selected neural canvas: ${selectedCkpt}`);
-        // 1. Define Workflow
-        const workflow = {
-            "3": { "class_type": "KSampler", "inputs": { "seed": Math.floor(Math.random() * 1000000), "steps": 25, "cfg": 7, "sampler_name": "euler", "scheduler": "normal", "denoise": 1, "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0] } },
-            "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": selectedCkpt } },
-            "5": { "class_type": "EmptyLatentImage", "inputs": { "width": isXL ? 1024 : 512, "height": isXL ? 1024 : 512, "batch_size": 1 } },
-            "6": { "class_type": "CLIPTextEncode", "inputs": { "text": prompt, "clip": ["4", 1] } },
-            "7": { "class_type": "CLIPTextEncode", "inputs": { "text": "low quality, blurry, text, watermark", "clip": ["4", 1] } },
-            "8": { "class_type": "VAEDecode", "inputs": { "samples": ["3", 0], "vae": ["4", 2] } },
-            "9": { "class_type": "SaveImage", "inputs": { "filename_prefix": "JARVIS_COMFY", "images": ["8", 0] } }
-        };
+        // Check if we have the UNET/Z-Image specialized loader (often used for newer models like Flux/Z-Image)
+        const hasUnetLoader = !!info['UNETLoader'];
+        const hasDualClipLoader = !!info['DualCLIPLoader'];
+        // Select the best model path
+        let workflow;
+        const seed = Math.floor(Math.random() * 1000000);
+        if (hasUnetLoader && hasDualClipLoader) {
+            status?.('JARVIS: Utilizing specialized Z-IMAGE pipeline...');
+            // Modern workflow for models like Flux or Z-Image
+            workflow = {
+                "1": { "class_type": "UNETLoader", "inputs": { "unet_name": "z_image_bf16.safetensors" } },
+                "2": { "class_type": "DualCLIPLoader", "inputs": { "clip_name1": "t5xxl_fp16.safetensors", "clip_name2": "clip_l.safetensors", "type": "flux" } },
+                "3": { "class_type": "VAELoader", "inputs": { "vae_name": "ae.safetensors" } },
+                "4": { "class_type": "EmptyLatentImage", "inputs": { "width": 1024, "height": 1024, "batch_size": 1 } },
+                "5": { "class_type": "CLIPTextEncode", "inputs": { "text": prompt, "clip": ["2", 0] } },
+                "6": { "class_type": "KSampler", "inputs": { "seed": seed, "steps": 20, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "denoise": 1, "model": ["1", 0], "positive": ["5", 0], "negative": ["7", 0], "latent_image": ["4", 0] } },
+                "7": { "class_type": "CLIPTextEncode", "inputs": { "text": "", "clip": ["2", 0] } },
+                "8": { "class_type": "VAEDecode", "inputs": { "samples": ["6", 0], "vae": ["3", 0] } },
+                "9": { "class_type": "SaveImage", "inputs": { "filename_prefix": "JARVIS_Z", "images": ["8", 0] } }
+            };
+        }
+        else {
+            // Classic Checkpoint Workflow (SDXL/SD1.5)
+            const availableCkpts = info.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [];
+            let selectedCkpt = availableCkpts.find((c) => c.toLowerCase().includes('xl')) ||
+                availableCkpts.find((c) => c.includes('z_image')) ||
+                availableCkpts[0];
+            const isXL = selectedCkpt?.toLowerCase().includes('xl');
+            status?.(`JARVIS: Utilizing standard checkpoint: ${selectedCkpt}`);
+            workflow = {
+                "3": { "class_type": "KSampler", "inputs": { "seed": seed, "steps": 25, "cfg": 7, "sampler_name": "euler", "scheduler": "normal", "denoise": 1, "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0] } },
+                "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": selectedCkpt } },
+                "5": { "class_type": "EmptyLatentImage", "inputs": { "width": isXL ? 1024 : 512, "height": isXL ? 1024 : 512, "batch_size": 1 } },
+                "6": { "class_type": "CLIPTextEncode", "inputs": { "text": prompt, "clip": ["4", 1] } },
+                "7": { "class_type": "CLIPTextEncode", "inputs": { "text": "low quality, blurry, text, watermark", "clip": ["4", 1] } },
+                "8": { "class_type": "VAEDecode", "inputs": { "samples": ["3", 0], "vae": ["4", 2] } },
+                "9": { "class_type": "SaveImage", "inputs": { "filename_prefix": "JARVIS_COMFY", "images": ["8", 0] } }
+            };
+        }
         // 2. Queue Prompt
         status?.('JARVIS: Transmitting workflow to ComfyUI...');
         const response = await fetch('http://127.0.0.1:8188/prompt', {

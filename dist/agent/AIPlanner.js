@@ -2,9 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AIPlanner = void 0;
 const OllamaClient_1 = require("../ui/OllamaClient");
+const Config_1 = require("../config/Config");
 class AIPlanner {
     async plan(input, context, statusCallback) {
         const status = statusCallback ?? (() => { });
+        const config = Config_1.Config.getInstance();
+        const runtimeModel = config.get('model');
         try {
             const routing = this.routeTask(input);
             const os = require('os');
@@ -15,7 +18,7 @@ You are JARVIS, a real-world multi-agent AI operating system.
 Mission: Autonomous chief-of-staff, technical architect, automation engineer, researcher, and productivity manager.
 
 MODEL ROUTING:
-- Brain (Deep Reasoning): deepseek-r1:14b
+- Brain (Deep Reasoning): ${runtimeModel}
 - Coding (Architect): qwen3-coder:30b
 - Coding (Express): qwen2.5-coder:14b
 - Tool Specialist: nexusraven:13b
@@ -44,6 +47,7 @@ AVAILABLE TOOLS:
 - fetch_web_page(url): Deep site reconnaissance.
 - take_screenshot(): Optical sensors (Captures screen).
 - system_control(action, value): Controls (volume_up, volume_down, mute, launch_app, open_url, stop_speech).
+- computer_control(action, x?, y?, key?, text?, keys?): Direct mouse/keyboard control.
 - remember_fact(fact, tags): Store important info in long-term memory.
 - search_knowledge_base(query): Search long-term memory and indexed files.
 - index_file(path): Add a file to the knowledge base for future RAG.
@@ -68,7 +72,7 @@ Constraint: The '### Result' section must be the actual message you speak to Sir
 `;
             status(`Routing to ${routing.reason} (${this.modelMap()[routing.role]})...`);
             status(`Thinking...`);
-            const planResult = await OllamaClient_1.ollamaClient.generatePlan(`${systemPrompt}\n\nUser Request: "${input}"\n\nContext Memory: ${JSON.stringify(context || {})}`, routing.role);
+            const planResult = await OllamaClient_1.ollamaClient.generatePlan(`${systemPrompt}\n\nUser Request: "${input}"\n\nContext Memory: ${JSON.stringify(context || {})}`, routing.role, runtimeModel);
             if (planResult.success && planResult.data?.parsedPlan) {
                 const plan = planResult.data.parsedPlan;
                 if (plan.actions?.length) {
@@ -122,7 +126,7 @@ Constraint: The '### Result' section must be the actual message you speak to Sir
             return { role: 'brain', reason: 'Deep Reasoning (DeepSeek-R1)' };
         }
         // 6. Default: Instant Chat for everything else (Greetings, simple requests)
-        return { role: 'chat', reason: 'Instant Interface' };
+        return { role: 'coding_fast', reason: 'Instant Interface' };
     }
     fallbackPlan(input, context) {
         const actions = [];

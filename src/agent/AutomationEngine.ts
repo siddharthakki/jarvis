@@ -19,6 +19,8 @@ export interface Workflow {
 }
 
 export class AutomationEngine {
+  private static readonly MAX_TOOL_CALLS = 10;
+  private toolCallCount = 0;
   private toolExecutor: ToolExecutor;
   private policyEngine: PolicyEngine;
   private approvalFlow: ApprovalFlow;
@@ -40,6 +42,14 @@ export class AutomationEngine {
    * Execute a single automation step
    */
   async executeStep(step: AutomationStep, context?: Record<string, any>): Promise<any> {
+    if (this.toolCallCount >= AutomationEngine.MAX_TOOL_CALLS) {
+      return {
+        success: false,
+        error: "Tool call limit reached. I attempted too many steps without completing.",
+        stepsCompleted: this.toolCallCount
+      };
+    }
+
     // Get current context
     const currentContext = context || {};
     
@@ -79,11 +89,24 @@ export class AutomationEngine {
    * Execute a workflow with multiple steps
    */
   async executeWorkflow(workflow: Workflow): Promise<any[]> {
+    this.toolCallCount = 0;
     const results: any[] = [];
     let context: Record<string, any> = workflow.context || {};
     
     try {
       for (const step of workflow.steps) {
+        if (this.toolCallCount >= AutomationEngine.MAX_TOOL_CALLS) {
+          return {
+            success: false,
+            error: "Tool call limit reached. I attempted too many steps without completing. Here is what I accomplished so far:",
+            partialResults: results,
+            stepsCompleted: this.toolCallCount,
+            stepsTotal: workflow.steps.length
+          } as any;
+        }
+
+        this.toolCallCount++;
+
         // Execute the current step
         const result = await this.executeStep(step, context);
         

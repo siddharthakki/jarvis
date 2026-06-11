@@ -12,7 +12,7 @@ class OllamaClient {
         this.ollamaUrl = 'http://localhost:11434';
         // Elite Suite - Optimized for 24GB VRAM (RTX 3090)
         this.modelMap = {
-            'chat': 'llama3.2:1b',
+            'chat': 'qwen2.5-coder:14b',
             'brain': 'deepseek-r1:14b',
             'coding': 'qwen3-coder:30b',
             'coding_fast': 'qwen2.5-coder:14b',
@@ -42,8 +42,8 @@ class OllamaClient {
     /**
      * Send a prompt to Ollama using a specific role-based model
      */
-    async generatePlan(prompt, role = 'brain') {
-        const model = this.modelMap[role] || this.modelMap['brain'];
+    async generatePlan(prompt, role = 'brain', overrideModel) {
+        const model = overrideModel || this.modelMap[role] || this.modelMap['brain'];
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min hard cap
@@ -70,14 +70,14 @@ class OllamaClient {
         }
         catch (error) {
             console.error(`Ollama client error (${model}):`, error);
-            return this.generatePlanCLI(prompt, role);
+            return this.generatePlanCLI(prompt, role, overrideModel);
         }
     }
     /**
      * Fallback method using curl CLI
      */
-    async generatePlanCLI(prompt, role = 'brain') {
-        const model = this.modelMap[role] || this.modelMap['brain'];
+    async generatePlanCLI(prompt, role = 'brain', overrideModel) {
+        const model = overrideModel || this.modelMap[role] || this.modelMap['brain'];
         try {
             const escapedPrompt = this.escapePrompt(prompt);
             const payload = JSON.stringify({

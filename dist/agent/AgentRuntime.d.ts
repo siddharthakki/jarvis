@@ -13,4 +13,5 @@ export declare class AgentRuntime {
     setSpeakCallback(callback: (text: string) => void): void;
     processInput(input: string, context?: any): Promise<any>;
     private executePlan;
+    private speakInChunks;
 }

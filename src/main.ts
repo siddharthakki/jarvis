@@ -39,6 +39,7 @@ import './tools/calendarTools';
 import './tools/knowledgeTools';
 import './tools/imageTools';
 import './tools/ollamaTools';
+import './tools/computerControlTools';
 
 let mainWindow: MainWindow | null = null;
 let agentRuntime: AgentRuntime | null = null;

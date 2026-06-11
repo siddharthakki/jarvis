@@ -27,6 +27,19 @@ exports.listDirectoryTool = exports.appendFileTool = exports.writeFileTool = exp
 const ToolRegistry_1 = require("./ToolRegistry");
 const fs = __importStar(require("fs/promises"));
 const path = __importStar(require("path"));
+const os = __importStar(require("os"));
+const ALLOWED_ROOTS = [
+    path.join(os.homedir(), '.jarvis'),
+    'C:\\Projects',
+    os.homedir() + '\\Documents',
+    os.homedir() + '\\Desktop',
+    os.tmpdir(),
+    process.cwd()
+];
+function isPathAllowed(filePath) {
+    const resolved = path.resolve(filePath);
+    return ALLOWED_ROOTS.some(root => resolved.startsWith(path.resolve(root)));
+}
 // File reading tool
 const readFileTool = {
     name: 'read_file',
@@ -45,6 +58,12 @@ const readFileTool = {
     mutatesWorkspace: false,
     requiresWorkspace: true,
     async execute(args, context) {
+        if (!isPathAllowed(args.path)) {
+            return {
+                success: false,
+                error: `Access denied: path is outside allowed directories. Allowed roots: ${ALLOWED_ROOTS.join(', ')}`
+            };
+        }
         const filePath = args.path;
         try {
             // Read file from the filesystem
@@ -85,6 +104,12 @@ const writeFileTool = {
     mutatesWorkspace: true,
     requiresWorkspace: true,
     async execute(args, context) {
+        if (!isPathAllowed(args.path)) {
+            return {
+                success: false,
+                error: `Access denied: path is outside allowed directories. Allowed roots: ${ALLOWED_ROOTS.join(', ')}`
+            };
+        }
         const filePath = args.path;
         const content = args.content;
         try {
@@ -126,6 +151,12 @@ const appendFileTool = {
     mutatesWorkspace: true,
     requiresWorkspace: true,
     async execute(args, context) {
+        if (!isPathAllowed(args.path)) {
+            return {
+                success: false,
+                error: `Access denied: path is outside allowed directories. Allowed roots: ${ALLOWED_ROOTS.join(', ')}`
+            };
+        }
         const filePath = args.path;
         const content = args.content;
         try {
@@ -163,6 +194,12 @@ const listDirectoryTool = {
     mutatesWorkspace: false,
     requiresWorkspace: true,
     async execute(args, context) {
+        if (!isPathAllowed(args.path)) {
+            return {
+                success: false,
+                error: `Access denied: path is outside allowed directories. Allowed roots: ${ALLOWED_ROOTS.join(', ')}`
+            };
+        }
         const dirPath = args.path;
         try {
             const items = await fs.readdir(dirPath);

@@ -10,6 +10,10 @@ class VoiceHandler {
         this.isListening = false;
         this.wakeWord = Config_1.defaultConfig.wakeWord;
         this.voiceActivationEnabled = Config_1.defaultConfig.voiceActivationEnabled;
+        this.sttWebSocket = null;
+        this.audioContext = null;
+        this.scriptProcessor = null;
+        this.isFasterWhisperListening = false;
         this.agentRuntime = agentRuntime;
         this.initVoiceRecognition();
     }
@@ -75,6 +79,109 @@ class VoiceHandler {
             }
         }
     }
+    /**
+     * Connect to the faster-whisper STT endpoint
+     */
+    connectFasterWhisper() {
+        // Try to create WebSocket connection to the STT endpoint
+        try {
+            const wsUrl = `ws://localhost:8765/ws/stt`;
+            this.sttWebSocket = new WebSocket(wsUrl);
+            this.sttWebSocket.onopen = () => {
+                console.log('Connected to faster-whisper STT endpoint');
+                this.isFasterWhisperListening = true;
+                // Initialize audio context and start capturing
+                this.initAudioCapture();
+            };
+            this.sttWebSocket.onmessage = (event) => {
+                if (typeof event.data === 'string') {
+                    try {
+                        const data = JSON.parse(event.data);
+                        // Handle wake word detection
+                        if (data.wake_word === true) {
+                            if (this.voiceActivationEnabled && this.wakeWord) {
+                                // When wake word is detected, we just call processCommand with the full text
+                                // The existing logic in processCommand will handle wake word detection properly
+                                this.processCommand(data.text);
+                            }
+                        }
+                        // Handle regular transcription result
+                        else if (data.is_final === true && data.text) {
+                            // Call the existing processCommand callback with the transcript
+                            this.processCommand(data.text);
+                        }
+                    }
+                    catch (error) {
+                        console.error('Error parsing STT response:', error);
+                    }
+                }
+                else {
+                    // Handle binary audio data from WebSocket
+                    // This is not expected here since we're receiving JSON responses, but keeping for completeness
+                }
+            };
+            this.sttWebSocket.onerror = (error) => {
+                console.warn('faster-whisper STT connection error:', error);
+                // Fallback silently to Web Speech API if WebSocket fails
+                this.isFasterWhisperListening = false;
+            };
+            this.sttWebSocket.onclose = () => {
+                console.log('faster-whisper STT connection closed');
+                this.isFasterWhisperListening = false;
+            };
+        }
+        catch (error) {
+            console.warn('Failed to initialize faster-whisper STT:', error);
+            // Fallback silently to Web Speech API if WebSocket fails
+            this.isFasterWhisperListening = false;
+        }
+    }
+    /**
+     * Initialize audio capture using Web Audio API
+     */
+    initAudioCapture() {
+        if (!this.isFasterWhisperListening || !navigator.mediaDevices || !window.AudioContext) {
+            return;
+        }
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        try {
+            this.audioContext = new AudioContext({ sampleRate: 16000 });
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then((stream) => {
+                // Create source from microphone
+                const source = this.audioContext.createMediaStreamSource(stream);
+                // Create script processor node for audio data capture
+                this.scriptProcessor = this.audioContext.createScriptProcessor(4096, 1, 1);
+                // Connect nodes
+                source.connect(this.scriptProcessor);
+                this.scriptProcessor.connect(this.audioContext.destination);
+                // Set up audio processing callback
+                this.scriptProcessor.onaudioprocess = (event) => {
+                    if (!this.isFasterWhisperListening || !this.sttWebSocket || this.sttWebSocket.readyState !== WebSocket.OPEN) {
+                        return;
+                    }
+                    const input = event.inputBuffer.getChannelData(0);
+                    // Convert float32 to int16
+                    const int16Array = new Int16Array(input.length);
+                    for (let i = 0; i < input.length; i++) {
+                        int16Array[i] = Math.max(-32768, Math.min(32767, input[i] * 32768));
+                    }
+                    // Send binary data to WebSocket
+                    this.sttWebSocket.send(int16Array.buffer);
+                };
+            })
+                .catch((error) => {
+                console.error('Error accessing microphone:', error);
+                // Fallback silently to Web Speech API if microphone access fails
+                this.isFasterWhisperListening = false;
+            });
+        }
+        catch (error) {
+            console.error('Error initializing audio context:', error);
+            // Fallback silently to Web Speech API if audio context fails
+            this.isFasterWhisperListening = false;
+        }
+    }
     stopListening() {
         if (this.recognition && this.isListening) {
             this.isListening = false;
@@ -124,6 +231,24 @@ class VoiceHandler {
     }
     isListeningStatus() {
         return this.isListening;
+    }
+    /**
+     * Stop listening for voice input (faster-whisper version)
+     */
+    stopFasterWhisperListening() {
+        if (this.sttWebSocket) {
+            this.sttWebSocket.close();
+            this.sttWebSocket = null;
+        }
+        if (this.scriptProcessor) {
+            this.scriptProcessor.disconnect();
+            this.scriptProcessor = null;
+        }
+        if (this.audioContext) {
+            this.audioContext.close();
+            this.audioContext = null;
+        }
+        this.isFasterWhisperListening = false;
     }
 }
 exports.VoiceHandler = VoiceHandler;

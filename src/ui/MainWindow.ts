@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import { ttsService } from '../services/TTSService';
+import { Config } from '../config/Config';
 
 export class MainWindow {
   private window: BrowserWindow | null = null;
@@ -47,6 +48,11 @@ export class MainWindow {
     win.on('closed', () => {
       console.log('Window closed.');
       this.window = null;
+    });
+
+    // Grant microphone permission so Web Speech API works in Electron
+    win.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+      callback(permission === 'media');
     });
 
     win.webContents.on('did-finish-load', () => {
@@ -124,6 +130,29 @@ export class MainWindow {
     ipcMain.on('stop-speech', () => {
       ttsService.stop();
     });
+
+    ipcMain.handle('jarvis:set-config', (_, key, value) => {
+      Config.getInstance().set(key, value);
+      return true;
+    });
+
+    ipcMain.handle('jarvis:get-config', () => {
+      return Config.getInstance().getAll();
+    });
+
+    ipcMain.handle('jarvis:get-ollama-models', async () => {
+      const { execFile } = require('child_process');
+      return new Promise<string[]>((resolve) => {
+        execFile('ollama', ['list'], (err: any, stdout: string) => {
+          if (err) { resolve([]); return; }
+          const models = stdout.split('\n')
+            .slice(1)
+            .map((line: string) => line.split(/\s+/)[0])
+            .filter((name: string) => name && !name.includes('NAME'));
+          resolve(models);
+        });
+      });
+    });
   }
 
   public setAgentRuntime(agentRuntime: any): void {
@@ -133,6 +162,11 @@ export class MainWindow {
     });
     agentRuntime.setSpeakCallback((text: string) => {
       ttsService.stop();
+      // Estimate mute duration: ~13 chars/sec + 2s tail buffer
+      const wordCount = text.trim().split(/\s+/).length;
+      const estimatedMs = Math.max(3000, (wordCount / 2.5) * 1000 + 2000);
+      this.window?.webContents.send('tts-start', estimatedMs);
+      ttsService.onEnd = () => this.window?.webContents.send('tts-end');
       ttsService.speak(text);
     });
   }

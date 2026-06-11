@@ -119,18 +119,82 @@
         .chat-history {
             flex: 1;
             min-height: 0;
-            overflow-y: scroll;
+            overflow-y: auto;
             overflow-x: hidden;
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.85rem;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            padding-right: 10px;
+            gap: 5px;
+            padding: 10px;
             color: rgba(0, 243, 255, 0.9);
             scrollbar-width: thin;
             scrollbar-color: var(--fui-cyan) rgba(255, 255, 255, 0.05);
             scroll-behavior: smooth;
+        }
+
+        .msg {
+            max-width: 80%;
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-family: 'Rajdhani', sans-serif;
+            text-transform: none;
+            letter-spacing: 0.5px;
+            line-height: 1.4;
+            position: relative;
+        }
+
+        .msg-user {
+            align-self: flex-end;
+            background: rgba(0, 243, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            border-bottom-right-radius: 2px;
+        }
+
+        .msg-jarvis {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--fui-cyan);
+            border: 1px solid rgba(0, 243, 255, 0.1);
+            border-bottom-left-radius: 2px;
+        }
+
+        .msg-timestamp {
+            font-size: 0.55rem;
+            opacity: 0.4;
+            margin-top: 2px;
+            margin-bottom: 10px;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .user-container { align-items: flex-end; }
+        .jarvis-container { align-items: flex-start; }
+
+        #agent-status {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.6rem;
+            color: var(--fui-green);
+            text-shadow: 0 0 8px var(--fui-green);
+            letter-spacing: 2px;
+            padding: 8px;
+            text-align: center;
+            background: rgba(0, 255, 102, 0.05);
+            border-bottom: 1px solid rgba(0, 255, 102, 0.2);
+            margin-bottom: 10px;
+        }
+
+        #voice-toggle.active {
+            color: var(--fui-green);
+            border-color: var(--fui-green);
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.3);
+            animation: pulse-mic 2s infinite;
+        }
+
+        @keyframes pulse-mic {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); box-shadow: 0 0 15px var(--fui-green); }
+            100% { transform: scale(1); }
         }
 
         .chat-history::-webkit-scrollbar {
@@ -219,9 +283,85 @@
         .controls {
             display: none;
         }
+
+        /* SETTINGS PANEL */
+        #settings-panel {
+            background: rgba(11, 19, 26, 0.95);
+            border: 1px solid var(--fui-amber);
+            box-shadow: 0 0 40px rgba(255, 159, 0, 0.2);
+            z-index: 100;
+            width: 320px;
+        }
+
+        .settings-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.6rem;
+            color: var(--fui-amber);
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .settings-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 159, 0, 0.3);
+            padding: 6px;
+            color: #fff;
+            font-size: 0.8rem;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            margin-bottom: 12px;
+        }
+
+        .settings-input:focus {
+            border-color: var(--fui-amber);
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 12px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
+    <!-- SETTINGS OVERLAY -->
+    <div id="settings-panel" class="fixed top-20 right-10 p-6 hidden fui-panel">
+        <div class="fui-header border-amber-500 text-amber-500 mb-4">
+            <span>SYSTEM_CONFIGURATION</span>
+            <button onclick="toggleSettings()" class="text-amber-500 hover:text-white">✕</button>
+        </div>
+
+        <label class="settings-label">NEURAL_MODEL (OLLAMA)</label>
+        <select id="config-model" class="settings-input" style="background:#0a0f1a;cursor:pointer;">
+            <option value="">-- LOADING MODELS --</option>
+        </select>
+
+        <label class="settings-label">STT_ENGINE</label>
+        <div class="radio-group">
+            <label class="radio-option">
+                <input type="radio" name="stt-engine" value="webspeech"> WEB_SPEECH
+            </label>
+            <label class="radio-option">
+                <input type="radio" name="stt-engine" value="faster-whisper"> WHISPER
+            </label>
+        </div>
+
+        <label class="settings-label">TTS_VOICE_ID</label>
+        <input type="text" id="config-voice" class="settings-input" placeholder="default">
+
+        <button onclick="saveConfig()" class="w-full border border-amber-500 text-amber-500 py-2 text-xs hover:bg-amber-500/20 transition-all font-bold mt-2">
+            APPLY_CHANGES
+        </button>
+    </div>
     <div id="approval-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center hidden">
         <div class="fui-panel w-96 border-amber-500 shadow-[0_0_50px_rgba(255,159,0,0.2)]">
             <div class="fui-header border-amber-500 text-amber-500"><span>SECURITY_AUTHORIZATION_REQUIRED</span></div>
@@ -296,19 +436,26 @@
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div class="w-10 h-10 border border-cyan-500/30 flex items-center justify-center text-[0.5rem] hover:bg-cyan-500/20 cursor-pointer">DIAG</div>
-                    <div class="w-10 h-10 border border-cyan-500/30 flex items-center justify-center text-[0.5rem] hover:bg-cyan-500/20 cursor-pointer">NET</div>
+                    <div onclick="toggleSettings()" class="w-10 h-10 border border-amber-500/30 flex items-center justify-center text-[0.5rem] hover:bg-amber-500/20 cursor-pointer text-amber-500">SET</div>
                 </div>
             </div>
 
             <section class="chat-terminal">
-                <div class="fui-header border-none mb-2"><span>MISSION_DIALOGUE_FEED</span></div>
-                <div id="chat-history" class="chat-history">
+                <div id="agent-status" class="text-[0.6rem] text-center mb-2">JARVIS ONLINE</div>
+                <div id="chat-messages" class="chat-history">
                     <div class="msg-jarvis">SYSTEM INITIALIZED. READY FOR COMMAND, SIR.</div>
                 </div>
 
+                <div id="mic-viz" style="display:flex;align-items:flex-end;gap:2px;height:24px;padding:0 4px;"></div>
+
                 <div class="input-wrapper">
-                    <div class="waveform" id="mic-viz"></div>
-                    <input type="text" id="cmd-input" placeholder="ACCESS TERMINAL..." class="cmd-input" autocomplete="off">
+                    <button id="voice-toggle" class="p-2 rounded-full border border-gray-500 hover:border-cyan-500 transition-colors" onclick="toggleVoice()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic" viewBox="0 0 16 16">
+                            <path d="M15 10a2.5 2.5 0 0 1-5 0V3a2.5 2.5 0 0 1 5 0v7zm-4 0a1.5 1.5 0 0 0 3 0V3a1.5 1.5 0 0 0-3 0v7z"/>
+                            <path d="M10 12a1 1 0 1 1 2 0v2a1 1 0 1 1-2 0v-2zm-4 0a1 1 0 1 1 2 0v2a1 1 0 1 1-2 0v-2z"/>
+                        </svg>
+                    </button>
+                    <input type="text" id="cmd-input" placeholder="ACCESS TERMINAL..." class="cmd-input flex-1" autocomplete="off">
                 </div>
             </section>
         </main>
@@ -435,48 +582,95 @@
 
         // 2. Chat Logic
         const input = document.getElementById('cmd-input');
-        const history = document.getElementById('chat-history');
+        const history = document.getElementById('chat-messages');
+        const agentStatus = document.getElementById('agent-status');
+        const voiceBtn = document.getElementById('voice-toggle');
+
+        window.voiceActive = true; // Default to active as per earlier implementation
+
+        function toggleVoice() {
+            window.voiceActive = !window.voiceActive;
+            const log = document.getElementById('threat-log');
+            if (window.voiceActive) {
+                voiceBtn.classList.add('active');
+                voiceBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic" viewBox="0 0 16 16">
+                        <path d="M15 10a2.5 2.5 0 0 1-5 0V3a2.5 2.5 0 0 1 5 0v7zm-4 0a1.5 1.5 0 0 0 3 0V3a1.5 1.5 0 0 0-3 0v7z"/>
+                        <path d="M10 12a1 1 0 1 1 2 0v2a1 1 0 1 1-2 0v-2zm-4 0a1 1 0 1 1 2 0v2a1 1 0 1 1-2 0v-2z"/>
+                    </svg>`;
+                initVoice();
+                logVoice('> VOICE_LINK: RESTORED', 'var(--fui-green)');
+            } else {
+                voiceBtn.classList.remove('active');
+                voiceBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic-mute" viewBox="0 0 16 16">
+                        <path d="M13 8c0 .564-.094 1.107-.266 1.613l-.814-.814A4.02 4.02 0 0 0 12 8V7a.5.5 0 0 1 1 0v1zm-5 4c.818 0 1.578-.245 2.212-.667l.718.719a4.973 4.973 0 0 1-2.43.923V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 1 0v1a4 4 0 0 0 4 4zm3-9v4.879L5.158 2.037A3.001 3.001 0 0 1 11 3z"/>
+                        <path d="M9.486 10.607 5.12 6.241V10a3 3 0 0 0 3 3c.507 0 1.012-.126 1.486-.393zM1.11 1.11a.5.5 0 0 1 .708 0L14.89 14.11a.5.5 0 0 1-.708.708L1.11 1.818a.5.5 0 0 1 0-.708z"/>
+                    </svg>`;
+
+                // Hard shutdown of all recognition services
+                if (window.recognition) {
+                    window.recognition.onend = null; // Prevent auto-restart loop
+                    window.recognition.stop();
+                }
+                if (window.whisperWS) {
+                    window.whisperWS.onclose = null; // Prevent auto-reconnect
+                    window.whisperWS.close();
+                    window.whisperWS = null;
+                }
+                micActive = false;
+                logVoice('> VOICE_LINK: SEVERED (MUTE ACTIVE)', 'var(--fui-amber)');
+                if (agentStatus) agentStatus.textContent = 'VOICE MUTED';
+            }
+        }
+
+        // Initialize voice button state
+        if (window.voiceActive) voiceBtn.classList.add('active');
 
         function addMessage(role, text, results = null) {
             if (!text && !results) return;
 
+            const container = document.createElement('div');
+            container.className = role === 'user' ? 'user-container flex flex-col w-full' : 'jarvis-container flex flex-col w-full';
+
             const div = document.createElement('div');
-            div.className = role === 'user' ? 'msg-user' : 'msg-jarvis';
-            div.style.wordBreak = 'break-word';
-            div.style.overflowWrap = 'break-word';
-            div.style.marginBottom = '15px';
+            div.className = `msg msg-${role}`;
 
             try {
                 if (role === 'jarvis') {
-                    // Robust parsing of JARVIS response blocks
                     let content = text;
                     if (content.length > 10000) {
-                        content = content.substring(0, 10000) + "... [CONTENT TRUNCATED FOR STABILITY]";
+                        content = content.substring(0, 10000) + "... [CONTENT TRUNCATED]";
                     }
+
+                    // Remove raw JSON from the display entirely
+                    content = content.replace(/```json[\s\S]*?```/g, '').trim();
+                    if (!content && results) content = "Executing requested actions, Sir.";
 
                     let formatted = content
                         .replace(/### Understanding/g, '<h3>UNDERSTANDING</h3>')
                         .replace(/### Plan/g, '<h3>PLAN</h3>')
                         .replace(/### Agents Used/g, '<h3>AGENTS USED</h3>');
 
-                    // Close tags properly even if blocks are missing
                     if (formatted.includes('### Result')) {
-                        if (formatted.includes('### Next Best Action')) {
-                            formatted = formatted.replace(/### Result/g, '<h3>RESULT</h3><div class="msg-result">')
-                                                 .replace(/### Next Best Action/g, '</div><h3>NEXT BEST ACTION</h3>');
-                        } else {
-                            formatted = formatted.replace(/### Result/g, '<h3>RESULT</h3><div class="msg-result">') + '</div>';
+                        // Extract only the result if it exists to simplify the bubble
+                        const resultMatch = formatted.match(/### Result\s*([\s\S]*?)(?:###|$)/i);
+                        if (resultMatch) {
+                            formatted = `<div class="msg-result">${resultMatch[1].trim()}</div>`;
                         }
                     }
 
                     div.innerHTML = `<div>${formatted.replace(/\n/g, '<br>')}</div>`;
                 } else {
-                    div.innerHTML = `<div>SIR: ${text.replace(/\n/g, '<br>')}</div>`;
+                    div.innerHTML = `<div>${text.replace(/\n/g, '<br>')}</div>`;
                 }
+
+                container.appendChild(div);
 
                 if (results && results.length > 0) {
                     const resDiv = document.createElement('div');
-                    resDiv.className = 'tool-data';
+                    resDiv.className = 'tool-data w-full max-w-[85%]';
+                    // (Rendering logic preserved below)
 
                     results.forEach((result, idx) => {
                         if (!result.success) {
@@ -534,14 +728,22 @@
                         }
                     });
 
-                    div.appendChild(resDiv);
+                    container.appendChild(resDiv);
                 }
+
+                const timestamp = document.createElement('div');
+                timestamp.className = 'msg-timestamp';
+                timestamp.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                container.appendChild(timestamp);
+
             } catch (e) {
                 console.error("Message render error:", e);
-                div.textContent = "[SYSTEM ERROR IN RENDERER]";
+                const errDiv = document.createElement('div');
+                errDiv.textContent = "[SYSTEM ERROR IN RENDERER]";
+                container.appendChild(errDiv);
             }
 
-            history.appendChild(div);
+            history.appendChild(container);
 
             // Auto-scroll to bottom with smooth behavior
             requestAnimationFrame(() => {
@@ -575,6 +777,24 @@
             });
         });
 
+        // Mute mic while Jarvis is speaking to prevent echo
+        window.jarvisIsSpeaking = false;
+        let ttsMuteTimer = null;
+        ipcRenderer.on('tts-start', (_, estimatedMs) => {
+            window.jarvisIsSpeaking = true;
+            // Flush bridge.py's audio buffer so stale audio doesn't get transcribed
+            if (window.whisperWS && window.whisperWS.readyState === WebSocket.OPEN) {
+                window.whisperWS.send(JSON.stringify({ type: 'clear' }));
+            }
+            if (ttsMuteTimer) clearTimeout(ttsMuteTimer);
+            ttsMuteTimer = setTimeout(() => { window.jarvisIsSpeaking = false; }, estimatedMs || 5000);
+        });
+        ipcRenderer.on('tts-end', () => {
+            // Extend by 1s after callback fires — tail of audio still in the room
+            if (ttsMuteTimer) clearTimeout(ttsMuteTimer);
+            ttsMuteTimer = setTimeout(() => { window.jarvisIsSpeaking = false; }, 1000);
+        });
+
         ipcRenderer.on('voice-input-response', (event, data) => {
             if (data.response) {
                 addMessage('jarvis', data.response, data.results);
@@ -590,14 +810,17 @@
 
         // 3. Visualizers & Voice
         const micViz = document.getElementById('mic-viz');
-        for(let i=0; i<10; i++) {
-            const b = document.createElement('div');
-            b.className = 'wave-bar';
-            micViz.appendChild(b);
+        if (micViz) {
+            for(let i=0; i<10; i++) {
+                const b = document.createElement('div');
+                b.className = 'wave-bar';
+                micViz.appendChild(b);
+            }
         }
 
         let micActive = false;
         function animateMic() {
+            if (!micViz) { requestAnimationFrame(animateMic); return; }
             micViz.childNodes.forEach(b => {
                 if(b.style) {
                     const base = micActive ? 20 : 5;
@@ -610,68 +833,147 @@
         }
         animateMic();
 
-        function initVoice() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                console.warn('VOICE_LINK: SPEECH RECOGNITION NOT SUPPORTED');
+        function logVoice(msg, color) {
+            const log = document.getElementById('threat-log');
+            const entry = document.createElement('div');
+            if (color) entry.style.color = color;
+            entry.textContent = msg;
+            log.prepend(entry);
+        }
+
+        function handleVoiceTranscript(transcript) {
+            if (window.jarvisIsSpeaking) return;
+            const lower = transcript.trim().toLowerCase();
+            if (lower.length < 3) return;
+
+            // Filter trivial voice commands
+            const TRIVIAL_PHRASES = ['thank you', 'thanks', 'okay', 'ok', 'yes', 'no', 'alright', 'sure', 'great', 'good'];
+            const isTrivial = lower.split(' ').length <= 2 && TRIVIAL_PHRASES.some(p => lower.includes(p));
+            if (isTrivial) {
+                // Acknowledge without hitting the LLM
+                addMessage('jarvis', "You're welcome, Sir.");
                 return;
             }
 
-            const recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
+            // Add minimum word count check
+            const words = lower.split(/\s+/).filter(word => word.length > 0);
+            if (words.length < 2) return;
 
-            recognition.onstart = () => {
-                micActive = true;
-                const log = document.getElementById('threat-log');
-                const entry = document.createElement('div');
-                entry.textContent = '> VOICE_LINK: ONLINE';
-                log.prepend(entry);
-            };
+            // Show everything heard as a dim hint in chat
+            const hint = document.createElement('div');
+            hint.style.cssText = 'font-size:0.6rem;opacity:0.4;text-align:right;margin:2px 0;font-style:italic;';
+            hint.textContent = `🎙 ${transcript.trim()}`;
+            const history = document.getElementById('chat-messages');
+            if (history) { history.appendChild(hint); history.scrollTop = history.scrollHeight; }
 
-            recognition.onresult = (event) => {
-                const result = event.results[event.results.length - 1];
-                const transcript = result[0].transcript.trim().toLowerCase();
-                const wakeWord = 'jarvis';
-
-                if (result.isFinal && transcript.length > 2) {
-                    if (transcript.includes(wakeWord)) {
-                        const parts = transcript.split(wakeWord);
-                        const command = parts[parts.length - 1].trim();
-
-                        if (command && command.length > 1) {
-                            addMessage('user', command);
-                            ipcRenderer.send('voice-input', command);
-
-                            const log = document.getElementById('threat-log');
-                            const entry = document.createElement('div');
-                            entry.textContent = `> VOICE_INPUT: ${command.toUpperCase()}`;
-                            log.prepend(entry);
-                        }
-                    }
-                }
-            };
-
-            recognition.onerror = (err) => {
-                if (err.error !== 'no-speech') {
-                    console.error('VOICE_LINK_ERROR:', err.error);
-                }
-            };
-
-            recognition.onend = () => {
-                micActive = false;
-                // Auto-restart for always-listening mode
-                setTimeout(() => {
-                    try { recognition.start(); } catch(e) {}
-                }, 100);
-            };
-
-            try {
-                recognition.start();
-            } catch (e) {
-                console.error('VOICE_START_FAILED:', e);
+            // Strip optional "jarvis" prefix, then send whatever remains as command
+            const stripped = lower.replace(/^jarvis[,.]?\s*/i, '').trim();
+            const command = stripped || lower;
+            if (command.length > 2) {
+                addMessage('user', command);
+                ipcRenderer.send('voice-input', command);
+                if (agentStatus) agentStatus.textContent = 'PROCESSING COMMAND...';
+                logVoice(`> VOICE_INPUT: ${command.toUpperCase()}`);
             }
+        }
+
+        function initWhisperSTT() {
+            logVoice('> WHISPER_STT: CONNECTING...');
+            const ws = new WebSocket('ws://localhost:8765/ws/stt');
+            window.whisperWS = ws;
+
+            ws.onopen = () => {
+                logVoice('> WHISPER_STT: ONLINE', 'var(--fui-green)');
+                if (agentStatus) agentStatus.textContent = 'LISTENING (WHISPER)...';
+                micActive = true;
+
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                const audioCtx = new AudioCtx({ sampleRate: 16000 });
+                navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(stream => {
+                    const source = audioCtx.createMediaStreamSource(stream);
+                    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+                    source.connect(processor);
+                    processor.connect(audioCtx.destination);
+                    processor.onaudioprocess = (e) => {
+                        if (ws.readyState !== WebSocket.OPEN) return;
+                        if (window.jarvisIsSpeaking || !window.voiceActive) return;  // hard gate — drop all audio while TTS plays or muted
+                        const f32 = e.inputBuffer.getChannelData(0);
+                        const i16 = new Int16Array(f32.length);
+                        for (let i = 0; i < f32.length; i++)
+                            i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768));
+                        ws.send(i16.buffer);
+                    };
+                }).catch(err => logVoice(`> MIC_ERR: ${err.message}`, 'red'));
+            };
+
+            ws.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.is_final && data.text) {
+                        logVoice(`> HEARD: ${data.text}`);
+                        handleVoiceTranscript(data.text);
+                    }
+                } catch(_) {}
+            };
+
+            ws.onerror = () => logVoice('> WHISPER_STT: CONNECTION FAILED', 'red');
+            ws.onclose = () => {
+                micActive = false;
+                if (window.voiceActive) setTimeout(initWhisperSTT, 3000);
+            };
+        }
+
+        function initVoice() {
+            if (!window.voiceActive) return;
+
+            // Check config for STT engine preference
+            ipcRenderer.invoke('jarvis:get-config').then(config => {
+                if (config && config.sttEngine === 'faster-whisper') {
+                    initWhisperSTT();
+                    return;
+                }
+                // Web Speech API path
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    logVoice('> VOICE_ERR: Web Speech unavailable — switching to Whisper', 'orange');
+                    initWhisperSTT();
+                    return;
+                }
+                if (window.recognition) try { window.recognition.stop(); } catch(_) {}
+
+                const recognition = new SpeechRecognition();
+                window.recognition = recognition;
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+
+                recognition.onstart = () => {
+                    micActive = true;
+                    logVoice('> VOICE_LINK: ONLINE');
+                    if (agentStatus) agentStatus.textContent = 'LISTENING...';
+                };
+                recognition.onresult = (event) => {
+                    if (window.jarvisIsSpeaking) return;
+                    const result = event.results[event.results.length - 1];
+                    if (result.isFinal) handleVoiceTranscript(result[0].transcript);
+                };
+                recognition.onerror = (err) => {
+                    logVoice(`> VOICE_ERR: ${err.error}`, 'red');
+                    if (err.error === 'network' || err.error === 'service-not-allowed') {
+                        logVoice('> SWITCHING TO WHISPER_STT', 'orange');
+                        recognition.abort();
+                        window.voiceActive = true;
+                        initWhisperSTT();
+                    }
+                };
+                recognition.onend = () => {
+                    micActive = false;
+                    if (window.voiceActive && !window.whisperWS) {
+                        setTimeout(() => { try { recognition.start(); } catch(_) {} }, 100);
+                    }
+                };
+                try { recognition.start(); } catch(e) { logVoice(`> VOICE_START_FAILED: ${e}`, 'red'); }
+            });
         }
 
         const clock = document.getElementById('clock');
@@ -726,6 +1028,9 @@
         });
 
         ipcRenderer.on('status-update', (event, message) => {
+            if (agentStatus) {
+                agentStatus.textContent = message.toUpperCase();
+            }
             const log = document.getElementById('threat-log');
             if (log) {
                 const entry = document.createElement('div');
@@ -760,6 +1065,67 @@
             overlay.classList.add('hidden');
             ipcRenderer.send('approval-response', 'denied');
         });
+
+        // 6. Runtime Configuration
+        async function toggleSettings() {
+            const panel = document.getElementById('settings-panel');
+            if (panel.classList.contains('hidden')) {
+                // Load current config
+                const config = await ipcRenderer.invoke('jarvis:get-config');
+                document.getElementById('config-voice').value = config.ttsVoice;
+
+                // Populate model dropdown from ollama list
+                const select = document.getElementById('config-model');
+                const models = await ipcRenderer.invoke('jarvis:get-ollama-models');
+                select.innerHTML = '';
+                if (models.length === 0) {
+                    select.innerHTML = '<option value="">-- NO MODELS FOUND --</option>';
+                } else {
+                    models.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m;
+                        opt.textContent = m;
+                        if (m === config.model) opt.selected = true;
+                        select.appendChild(opt);
+                    });
+                }
+
+                const radios = document.getElementsByName('stt-engine');
+                for (const radio of radios) {
+                    if (radio.value === config.sttEngine) {
+                        radio.checked = true;
+                    }
+                }
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        async function saveConfig() {
+            const model = document.getElementById('config-model').value;
+            const ttsVoice = document.getElementById('config-voice').value;
+            let sttEngine = 'webspeech';
+
+            const radios = document.getElementsByName('stt-engine');
+            for (const radio of radios) {
+                if (radio.checked) {
+                    sttEngine = radio.value;
+                }
+            }
+
+            await ipcRenderer.invoke('jarvis:set-config', 'model', model);
+            await ipcRenderer.invoke('jarvis:set-config', 'ttsVoice', ttsVoice);
+            await ipcRenderer.invoke('jarvis:set-config', 'sttEngine', sttEngine);
+
+            const log = document.getElementById('threat-log');
+            const entry = document.createElement('div');
+            entry.textContent = '> CONFIG_UPDATED: SYSTEM REALIGNED';
+            entry.style.color = 'var(--fui-amber)';
+            log.prepend(entry);
+
+            toggleSettings();
+        }
 
         fetchNewsDirectly();
         setInterval(fetchNewsDirectly, 300000); // refresh every 5 min

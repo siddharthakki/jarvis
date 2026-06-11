@@ -30,10 +30,12 @@ class AgentRuntime {
         // Merge provided context with managed memory and vector knowledge
         const relevantHistory = await this.contextManager.getRelevantMemory(input);
         const relevantKnowledge = await VectorService_1.vectorService.search(input, 3);
+        // Limit history to last 2 entries for non-brain roles to prevent context pollution
+        const trimmedHistory = Array.isArray(relevantHistory)
+            ? relevantHistory.slice(-2)
+            : relevantHistory;
         const fullContext = {
-            ...this.contextManager.getMemory(),
-            relevantHistory,
-            relevantKnowledge,
+            recentHistory: trimmedHistory,
             ...context
         };
         this.statusCallback?.('Processing your request...');
@@ -41,8 +43,8 @@ class AgentRuntime {
         const plan = await this.planner.plan(input, fullContext, this.statusCallback);
         const executionResults = await this.executePlan(plan);
         // Speak the response if callback is set
-        if (this.speakCallback && plan.response) {
-            this.speakCallback(plan.response);
+        if (plan.response) {
+            this.speakInChunks(plan.response);
         }
         // Record history
         this.contextManager.addHistory(input, { plan, results: executionResults });
@@ -64,6 +66,23 @@ class AgentRuntime {
             name: 'plan',
             steps: convertedSteps
         });
+    }
+    speakInChunks(text) {
+        if (!this.speakCallback || !text)
+            return;
+        // Extract just the ### Result section if present
+        const resultMatch = text.match(/###\s*Result\s*\n([\s\S]*?)(?=###|$)/i);
+        const speakable = resultMatch ? resultMatch[1].trim() : text;
+        // Split on sentence boundaries
+        const sentences = speakable.match(/[^.!?]+[.!?]+/g) || [speakable];
+        let delay = 0;
+        for (const sentence of sentences) {
+            const trimmed = sentence.trim();
+            if (trimmed.length > 2) {
+                setTimeout(() => this.speakCallback(trimmed), delay);
+                delay += 200; // small stagger so TTS queue doesn't collide
+            }
+        }
     }
 }
 exports.AgentRuntime = AgentRuntime;

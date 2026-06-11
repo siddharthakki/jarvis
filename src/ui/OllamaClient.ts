@@ -8,7 +8,7 @@ import { ToolResult } from '../tools/ToolTypes';
 const execAsync = promisify(exec);
 
 export type ModelRole =
-  | 'chat'            // Instant responses (llama3.2:1b)
+  | 'chat'            // Instant responses (qwen2.5-coder:14b)
   | 'brain'           // Advanced reasoning (deepseek-r1:14b)
   | 'coding'          // Heavy architecture (qwen3-coder:30b)
   | 'coding_fast'     // Fast script edits (qwen2.5-coder:14b)
@@ -23,9 +23,9 @@ export class OllamaClient {
   constructor() {
     this.ollamaUrl = 'http://localhost:11434';
 
-    // Elite Suite - Optimized for 24GB VRAM (RTX 3090)
+// Elite Suite - Optimized for 24GB VRAM (RTX 3090)
     this.modelMap = {
-      'chat': 'llama3.2:1b',
+      'chat': 'qwen2.5-coder:14b',
       'brain': 'deepseek-r1:14b',
       'coding': 'qwen3-coder:30b',
       'coding_fast': 'qwen2.5-coder:14b',
@@ -57,8 +57,8 @@ export class OllamaClient {
   /**
    * Send a prompt to Ollama using a specific role-based model
    */
-  async generatePlan(prompt: string, role: ModelRole = 'brain'): Promise<ToolResult> {
-    const model = this.modelMap[role] || this.modelMap['brain'];
+  async generatePlan(prompt: string, role: ModelRole = 'brain', overrideModel?: string): Promise<ToolResult> {
+    const model = overrideModel || this.modelMap[role] || this.modelMap['brain'];
 
     try {
       const controller = new AbortController();
@@ -89,15 +89,15 @@ export class OllamaClient {
       };
     } catch (error) {
       console.error(`Ollama client error (${model}):`, error);
-      return this.generatePlanCLI(prompt, role);
+      return this.generatePlanCLI(prompt, role, overrideModel);
     }
   }
 
   /**
    * Fallback method using curl CLI
    */
-  async generatePlanCLI(prompt: string, role: ModelRole = 'brain'): Promise<ToolResult> {
-    const model = this.modelMap[role] || this.modelMap['brain'];
+  async generatePlanCLI(prompt: string, role: ModelRole = 'brain', overrideModel?: string): Promise<ToolResult> {
+    const model = overrideModel || this.modelMap[role] || this.modelMap['brain'];
     try {
       const escapedPrompt = this.escapePrompt(prompt);
       const payload = JSON.stringify({
