@@ -214,6 +214,14 @@ export class OllamaClient {
   }
 
   /**
+   * Simple text generation
+   */
+  async generate(prompt: string, role: ModelRole = 'chat', overrideModel?: string): Promise<string> {
+    const result = await this.generatePlan(prompt, role, overrideModel);
+    return result.data?.rawResponse || "";
+  }
+
+  /**
    * Get embedding for text using nomic-embed-text model
    */
   async getEmbedding(text: string): Promise<Float32Array> {

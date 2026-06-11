@@ -1,4 +1,4 @@
-import { RiskLevel } from './PermissionEvaluator';
+import { RiskLevel } from '../tools/ToolTypes';
 
 export class RiskClassifier {
   static classifyTool(toolName: string): RiskLevel {
