@@ -4,6 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ContextManager } from '../agent/ContextManager';
 
+let discoveredComfyUrl: string | null = null;
+
 /**
  * Generate Image Tool - Leverages ComfyUI if available, fallbacks to Ollama
  */
@@ -33,49 +35,78 @@ export const generateImageTool: Tool = {
     const prompt = args.prompt as string;
     const status = context?.statusCallback;
 
-    // 1. Check if ComfyUI is available (RTX 3090 Power)
-    const comfyAvailable = await checkComfyStatus();
+    // 1. Check if ComfyUI is available
+    const comfyUrl = await discoverComfy();
 
-    if (comfyAvailable) {
+    if (comfyUrl) {
       status?.('JARVIS: ComfyUI detected. Utilizing high-fidelity generation pipeline...');
-      return generateWithComfy(prompt, status);
+      try {
+        return await generateWithComfy(comfyUrl, prompt, status);
+      } catch (error: any) {
+        status?.(`JARVIS: ComfyUI execution failed: ${error.message}`);
+        console.error('ComfyUI Error:', error);
+        return {
+          success: false,
+          error: `ComfyUI failed: ${error.message}. Sir, I attempted to use the neural engine but encountered a technical obstacle.`
+        };
+      }
     }
 
-    // 2. Fallback to Ollama (Legacy/Experimental)
-    status?.('JARVIS: ComfyUI offline. Falling back to Ollama neural core...');
+    // 2. Fallback to Ollama ONLY if ComfyUI is physically offline
+    status?.('JARVIS: ComfyUI offline. Attempting Ollama neural core fallback...');
     return generateWithOllama(prompt, status);
   }
 };
 
-async function checkComfyStatus(): Promise<boolean> {
-  try {
-    const res = await fetch('http://127.0.0.1:8188/history', { method: 'GET' });
-    return res.ok;
-  } catch {
-    return false;
+async function discoverComfy(): Promise<string | null> {
+  const endpoints = ['http://127.0.0.1:8188', 'http://localhost:8188'];
+  for (const url of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${url}/history`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        discoveredComfyUrl = url;
+        return url;
+      }
+    } catch (e) {
+      // Silently try next
+    }
   }
+  return null;
 }
 
-async function generateWithComfy(prompt: string, status?: (msg: string) => void): Promise<ToolResult> {
+async function generateWithComfy(baseUrl: string, prompt: string, status?: (msg: string) => void): Promise<ToolResult> {
   try {
     // 0. Intelligent Node Discovery & Model Selection
     status?.('JARVIS: Analyzing ComfyUI object info for optimal workflow...');
-    const infoRes = await fetch('http://127.0.0.1:8188/object_info');
+    const infoRes = await fetch(`${baseUrl}/object_info`);
     const info = await infoRes.json();
 
-    // Check if we have the UNET/Z-Image specialized loader (often used for newer models like Flux/Z-Image)
-    const hasUnetLoader = !!info['UNETLoader'];
-    const hasDualClipLoader = !!info['DualCLIPLoader'];
+    const unetLoaderInfo = info['UNETLoader'];
+    const dualClipLoaderInfo = info['DualCLIPLoader'];
 
-    // Select the best model path
+    const availableUnets = unetLoaderInfo?.input?.required?.unet_name?.[0] || [];
+    const availableClips = dualClipLoaderInfo?.input?.required?.clip_name1?.[0] || [];
+
+    const hasZImageModels = availableUnets.includes('z_image_bf16.safetensors') &&
+                            availableClips.includes('t5xxl_fp16.safetensors');
+
     let workflow: any;
     const seed = Math.floor(Math.random() * 1000000);
 
-    if (hasUnetLoader && hasDualClipLoader) {
+    if (hasZImageModels) {
       status?.('JARVIS: Utilizing specialized Z-IMAGE pipeline...');
-      // Modern workflow for models like Flux or Z-Image
+      const unetInputs: any = { "unet_name": "z_image_bf16.safetensors" };
+
+      // Add weight_dtype if required by the node
+      if (unetLoaderInfo?.input?.required?.weight_dtype) {
+        unetInputs["weight_dtype"] = "default";
+      }
+
       workflow = {
-        "1": { "class_type": "UNETLoader", "inputs": { "unet_name": "z_image_bf16.safetensors" } },
+        "1": { "class_type": "UNETLoader", "inputs": unetInputs },
         "2": { "class_type": "DualCLIPLoader", "inputs": { "clip_name1": "t5xxl_fp16.safetensors", "clip_name2": "clip_l.safetensors", "type": "flux" } },
         "3": { "class_type": "VAELoader", "inputs": { "vae_name": "ae.safetensors" } },
         "4": { "class_type": "EmptyLatentImage", "inputs": { "width": 1024, "height": 1024, "batch_size": 1 } },
@@ -86,7 +117,6 @@ async function generateWithComfy(prompt: string, status?: (msg: string) => void)
         "9": { "class_type": "SaveImage", "inputs": { "filename_prefix": "JARVIS_Z", "images": ["8", 0] } }
       };
     } else {
-      // Classic Checkpoint Workflow (SDXL/SD1.5)
       const availableCkpts = info.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [];
       let selectedCkpt = availableCkpts.find((c: string) => c.toLowerCase().includes('xl')) ||
                         availableCkpts.find((c: string) => c.includes('z_image')) ||
@@ -106,37 +136,40 @@ async function generateWithComfy(prompt: string, status?: (msg: string) => void)
       };
     }
 
-    // 2. Queue Prompt
     status?.('JARVIS: Transmitting workflow to ComfyUI...');
-    const response = await fetch('http://127.0.0.1:8188/prompt', {
+    const response = await fetch(`${baseUrl}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: workflow })
     });
 
-    if (!response.ok) throw new Error(`ComfyUI API error: ${response.status}`);
-    const { prompt_id } = await response.json();
-    console.log(`[ComfyUI] Workflow queued. Prompt ID: ${prompt_id}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`ComfyUI API error: ${response.status} - ${errorText}`);
+    }
 
-    // 3. Poll for Completion (Max 120 seconds)
+    const promptResponse = await response.json();
+    if (promptResponse.node_errors && Object.keys(promptResponse.node_errors).length > 0) {
+      throw new Error(`ComfyUI Workflow errors: ${JSON.stringify(promptResponse.node_errors)}`);
+    }
+
+    const { prompt_id } = promptResponse;
+
     status?.('JARVIS: Neural artist is painting... (ComfyUI)');
     let completed = false;
     let fileName = '';
 
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 150; i++) {
       await new Promise(r => setTimeout(r, 2000));
-      const historyRes = await fetch(`http://127.0.0.1:8188/history/${prompt_id}`);
+      const historyRes = await fetch(`${baseUrl}/history/${prompt_id}`);
       const history = await historyRes.json();
 
       if (history[prompt_id]) {
         completed = true;
         const output = history[prompt_id].outputs;
-        console.log(`[ComfyUI] Execution complete. Outputs found for node(s): ${Object.keys(output).join(', ')}`);
-        // Find the node that saved the image (likely Node 9)
         for (const nodeId in output) {
           if (output[nodeId].images) {
             fileName = output[nodeId].images[0].filename;
-            console.log(`[ComfyUI] Target image found: ${fileName}`);
             break;
           }
         }
@@ -145,16 +178,17 @@ async function generateWithComfy(prompt: string, status?: (msg: string) => void)
     }
 
     if (!completed) throw new Error('ComfyUI generation timed out.');
+    if (!fileName) throw new Error('ComfyUI execution completed but no output image was found.');
 
-    // 4. Download Result
-    const viewRes = await fetch(`http://127.0.0.1:8188/view?filename=${fileName}&type=output`);
+    const viewRes = await fetch(`${baseUrl}/view?filename=${fileName}&type=output`);
     const buffer = await viewRes.arrayBuffer();
     const base64Data = Buffer.from(buffer).toString('base64');
 
     const localFileName = `jarvis_comfy_${Date.now()}.png`;
-    const filePath = path.join(ContextManager.dataDir, 'generated', localFileName);
+    const folderPath = path.join(ContextManager.dataDir, 'generated');
+    const filePath = path.join(folderPath, localFileName);
 
-    if (!fs.existsSync(path.dirname(filePath))) fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true });
     fs.writeFileSync(filePath, Buffer.from(buffer));
 
     return {
@@ -166,15 +200,14 @@ async function generateWithComfy(prompt: string, status?: (msg: string) => void)
       }
     };
   } catch (error: any) {
-    console.warn('ComfyUI failed, falling back to Ollama:', error.message);
-    return generateWithOllama(prompt, status);
+    throw error;
   }
 }
 
 async function generateWithOllama(prompt: string, status?: (msg: string) => void): Promise<ToolResult> {
   const model = 'x/z-image-turbo';
   try {
-    status?.(`JARVIS: Generating rapid prototype using Ollama ${model}...`);
+    status?.(`JARVIS: ComfyUI failed or unavailable. Attempting Ollama fallback with ${model}...`);
 
     const response = await fetch('http://localhost:11434/api/generate', {
       method: 'POST',
@@ -193,9 +226,10 @@ async function generateWithOllama(prompt: string, status?: (msg: string) => void
     if (!base64Data) throw new Error('No image data received from model');
 
     const fileName = `jarvis_ollama_${Date.now()}.png`;
-    const filePath = path.join(ContextManager.dataDir, 'generated', fileName);
+    const folderPath = path.join(ContextManager.dataDir, 'generated');
+    const filePath = path.join(folderPath, fileName);
 
-    if (!fs.existsSync(path.dirname(filePath))) fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true });
     fs.writeFileSync(filePath, base64Data, 'base64');
 
     return {

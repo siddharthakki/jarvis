@@ -1,0 +1,15 @@
+{
+  "baseUrl": "http://127.0.0.1:8188",
+  "workflowPath": "C:/Projects/jarvis/config/comfy/workflow.json",
+  "outputDir": "C:/Projects/jarvis/generated/images",
+  "promptNodeIds": ["6"],
+  "promptInputKey": "text",
+  "seedNodeIds": ["3"],
+  "seedInputKey": "seed",
+  "widthNodeIds": ["5"],
+  "widthInputKey": "width",
+  "heightNodeIds": ["5"],
+  "heightInputKey": "height",
+  "stepsNodeIds": ["3"],
+  "stepsInputKey": "steps"
+}

@@ -135,10 +135,10 @@ Constraint: The '### Result' section is what the user sees. Make it professional
        return { role: 'coding_fast', reason: 'Fast Scripting' };
     }
 
-    // 4. Automation & Multi-Tool Workflow
-    if (lower.includes('automate') || lower.includes('workflow') || lower.includes('scheduler') || lower.includes('generate image') || lower.includes('paint') || lower.includes('draw') || lower.includes('ollama') || lower.includes('models')) {
-       return { role: 'tool_use', reason: 'Automation Engine' };
-    }
+// 4. Automation & Multi-Tool Workflow
+      if (lower.includes('automate') || lower.includes('workflow') || lower.includes('scheduler') || lower.includes('generate image') || lower.includes('paint') || lower.includes('draw') || lower.includes('ollama') || lower.includes('models') || lower.includes('image generation') || lower.includes('create image')) {
+         return { role: 'tool_use', reason: 'Automation Engine' };
+      }
 
     // 5. High-Level Reasoning / "Thinking" Questions
     if (lower.includes('why') || lower.includes('how') || lower.includes('compare') || lower.includes('analyze')) {
