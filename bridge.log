@@ -1,0 +1,78 @@
+[STDERR] INFO:     Started server process [22716]
+INFO:     Waiting for application startup.
+
+[STDERR] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+
+[STDERR] INFO:     ('127.0.0.1', 59732) - "WebSocket /ws/telemetry" [accepted]
+
+[STDERR] INFO:     connection open
+
+[STDERR] INFO:     connection closed
+
+[STDERR] INFO:     Started server process [4992]
+INFO:     Waiting for application startup.
+
+[STDERR] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+
+[STDERR] INFO:     ('127.0.0.1', 57668) - "WebSocket /ws/telemetry" [accepted]
+
+[STDERR] INFO:     connection open
+
+[STDERR] INFO:     Started server process [29276]
+INFO:     Waiting for application startup.
+
+[STDERR] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+
+[STDERR] INFO:     ('127.0.0.1', 53601) - "WebSocket /ws/telemetry" [accepted]
+
+[STDERR] INFO:     connection open
+
+[STDERR] INFO:     connection closed
+
+[STDERR] INFO:     Started server process [3648]
+INFO:     Waiting for application startup.
+
+[STDERR] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+
+[STDERR] INFO:     ('127.0.0.1', 60482) - "WebSocket /ws/telemetry" [accepted]
+
+[STDERR] INFO:     connection open
+
+[STDERR] INFO:     Started server process [38196]
+INFO:     Waiting for application startup.
+
+[STDERR] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+
+[STDERR] INFO:     ('127.0.0.1', 52512) - "WebSocket /ws/telemetry" [accepted]
+
+[STDERR] INFO:     connection open
+
+[STDERR] INFO:     Started server process [26464]
+INFO:     Waiting for application startup.
+
+[STDERR] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+
+[STDERR] INFO:     ('127.0.0.1', 62085) - "WebSocket /ws/telemetry" [accepted]
+
+[STDERR] INFO:     connection open
+
+[STDERR] INFO:     connection closed
+
+[STDERR] INFO:     Started server process [25328]
+INFO:     Waiting for application startup.
+
+[STDERR] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8765 (Press CTRL+C to quit)
+
+[STDERR] INFO:     ('127.0.0.1', 63399) - "WebSocket /ws/telemetry" [accepted]
+
+[STDERR] INFO:     connection open
+
+[STDERR] INFO:     connection closed
+

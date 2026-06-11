@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS HUD - INTEGRATED MARK IX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;400;500;700&family=JetBrains+Mono:wght@300&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0B131A;
+            --fui-cyan: #00F3FF;
+            --fui-amber: #FF9F00;
+            --fui-green: #00FF66;
+            --border-glow: rgba(0, 243, 255, 0.4);
+            --panel-bg: rgba(11, 19, 26, 0.92);
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--fui-cyan);
+            font-family: 'Rajdhani', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .hud-wrapper {
+            display: grid;
+            grid-template-columns: 350px 1fr 350px;
+            grid-gap: 20px;
+            height: calc(100vh - 40px); /* Strict viewport height minus padding */
+            width: 100%;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+
+        /* COMPACT PANELS */
+        .fui-panel {
+            background: rgba(11, 19, 26, 0.4);
+            border: 1px solid var(--border-glow);
+            backdrop-filter: blur(20px);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            box-shadow: inset 0 0 30px rgba(0, 243, 255, 0.05);
+            min-height: 0; /* Allow shrinking in flex/grid */
+        }
+
+        .fui-header {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            color: #fff;
+            border-bottom: 1px solid var(--border-glow);
+            padding-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .sub-panel {
+            border: 1px solid rgba(0, 243, 255, 0.1);
+            padding: 8px;
+            background: rgba(0, 243, 255, 0.02);
+        }
+
+        /* CENTER INTEGRATED TERMINAL */
+        .center-hub {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .arc-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            padding: 20px;
+            background: rgba(0, 243, 255, 0.03);
+            border-bottom: 1px solid var(--border-glow);
+        }
+
+        .arc-reactor-small {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ring { position: absolute; border-radius: 50%; border: 1px solid var(--fui-cyan); }
+        .r-outer { width: 100%; height: 100%; border-style: dashed; opacity: 0.2; animation: rotate 20s linear infinite; }
+        .r-inner { width: 70%; height: 70%; border: 2px solid var(--fui-cyan); border-top-color: transparent; animation: rotate-rev 5s linear infinite; }
+        .core-dot { width: 40px; height: 40px; background: white; border-radius: 50%; box-shadow: 0 0 30px var(--fui-cyan); }
+
+        .chat-terminal {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-glow);
+            padding: 15px;
+            min-height: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .chat-history {
+            flex: 1;
+            min-height: 0;
+            overflow-y: scroll;
+            overflow-x: hidden;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-right: 10px;
+            color: rgba(0, 243, 255, 0.9);
+            scrollbar-width: thin;
+            scrollbar-color: var(--fui-cyan) rgba(255, 255, 255, 0.05);
+            scroll-behavior: smooth;
+        }
+
+        .chat-history::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        .chat-history::-webkit-scrollbar-track {
+            background: rgba(0, 243, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .chat-history::-webkit-scrollbar-thumb {
+            background: var(--fui-cyan);
+            border-radius: 10px;
+            border: 2px solid rgba(0, 243, 255, 0.05);
+            box-shadow: 0 0 8px var(--fui-cyan);
+        }
+
+        .chat-history::-webkit-scrollbar-thumb:hover {
+            background: #00FFFF;
+            box-shadow: 0 0 12px #00FFFF;
+        }
+
+        .chat-history h3 {
+            font-size: 0.65rem;
+            color: var(--fui-amber);
+            margin: 8px 0 2px 0;
+            opacity: 0.8;
+            border-bottom: 1px solid rgba(255, 159, 0, 0.2);
+            width: fit-content;
+        }
+
+        .msg-user { color: #fff; border-left: 2px solid #fff; padding-left: 10px; opacity: 0.7; }
+        .msg-jarvis {
+            color: var(--fui-cyan);
+            border-left: 2px solid var(--fui-cyan);
+            padding-left: 10px;
+            font-weight: 500;
+            background: rgba(0, 243, 255, 0.02);
+            padding-bottom: 8px;
+        }
+
+        .msg-result {
+            font-size: 1.1rem;
+            color: #fff;
+            text-shadow: 0 0 12px var(--fui-cyan);
+            margin-top: 5px;
+            font-family: 'Rajdhani', sans-serif;
+            text-transform: none;
+            letter-spacing: 0.5px;
+        }
+
+        .tool-call { font-size: 0.7rem; color: var(--fui-amber); margin-top: 4px; font-style: italic; }
+        .tool-data { background: rgba(0,0,0,0.3); padding: 5px; font-size: 0.7rem; color: var(--fui-green); margin-top: 5px; max-height: 100px; overflow: auto; }
+
+        .input-wrapper {
+            margin-top: 15px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .cmd-input {
+            flex: 1;
+            background: rgba(0, 243, 255, 0.05);
+            border: 1px solid var(--border-glow);
+            padding: 12px;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        /* STATS */
+        .stat-bar-bg { height: 3px; background: rgba(255, 255, 255, 0.1); width: 100%; margin-top: 4px; }
+        .stat-bar-fill { height: 100%; background: var(--fui-cyan); box-shadow: 0 0 8px var(--fui-cyan); transition: width 0.5s; }
+
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes rotate-rev { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+
+        .waveform { display: flex; gap: 2px; height: 20px; align-items: center; }
+        .wave-bar { width: 2px; height: 40%; background: var(--fui-cyan); transition: height 0.1s; }
+
+        .controls {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="approval-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center hidden">
+        <div class="fui-panel w-96 border-amber-500 shadow-[0_0_50px_rgba(255,159,0,0.2)]">
+            <div class="fui-header border-amber-500 text-amber-500"><span>SECURITY_AUTHORIZATION_REQUIRED</span></div>
+            <div class="p-4 space-y-4">
+                <div class="text-[0.6rem] text-amber-500/60 font-mono tracking-widest">PERMIT_ACTION:</div>
+                <div id="approval-tool" class="text-xl font-bold text-white tracking-tighter">TOOL_NAME</div>
+
+                <div class="sub-panel border-amber-500/20 bg-amber-500/5">
+                    <div class="text-[0.6rem] text-amber-500/60 mb-1">REASON:</div>
+                    <div id="approval-reason" class="text-xs italic">Requesting system modification permissions.</div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mt-6">
+                    <button id="approve-btn" class="border border-[#00FF66] text-[#00FF66] py-2 text-xs hover:bg-[#00FF66]/20 transition-all font-bold">AUTHORIZE</button>
+                    <button id="deny-btn" class="border border-red-500 text-red-500 py-2 text-xs hover:bg-red-500/20 transition-all font-bold">TERMINATE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hud-wrapper">
+
+        <!-- LEFT: SYSTEM METRICS -->
+        <aside class="fui-panel">
+            <div class="fui-header"><span>SYSTEM_TELEMETRY.v9</span><span id="link-indicator" style="font-size: 0.6rem; color: var(--fui-amber);">LINK: OFFLINE</span><span id="clock">00:00:00</span></div>
+
+            <div class="sub-panel">
+                <div class="flex justify-between text-[0.7rem] mb-1"><span>CPU_LOAD</span><span id="cpu-val">0%</span></div>
+                <div class="stat-bar-bg"><div id="cpu-bar" class="stat-bar-fill" style="width: 0%"></div></div>
+            </div>
+
+            <div class="sub-panel">
+                <div class="flex justify-between text-[0.7rem] mb-1"><span>MEMORY_USAGE</span><span id="ram-val">0%</span></div>
+                <div class="stat-bar-bg"><div id="ram-bar" class="stat-bar-fill" style="width: 0%; background: var(--fui-green); box-shadow: 0 0 8px var(--fui-green);"></div></div>
+            </div>
+
+            <div class="sub-panel" id="gpu-panel" style="display: none;">
+                <div class="flex justify-between text-[0.7rem] mb-1"><span id="gpu-label">GPU_USAGE</span><span id="gpu-val">0%</span></div>
+                <div class="stat-bar-bg"><div id="gpu-bar" class="stat-bar-fill" style="width: 0%; background: #FF9F00; box-shadow: 0 0 8px #FF9F00;"></div></div>
+            </div>
+
+            <div class="sub-panel">
+                <div class="flex justify-between text-[0.7rem] mb-1"><span>GLOBAL_NEWS_FEED</span></div>
+                <div id="news-feed" class="text-[0.55rem] space-y-2 opacity-80 leading-tight">
+                    <div class="border-l border-cyan-500 pl-2">> SYNCHRONIZING WITH WORLD NEWS...</div>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col min-h-0">
+                <div class="fui-header"><span>THREAT_LOG</span></div>
+                <div id="threat-log" class="font-mono text-[0.6rem] opacity-60 space-y-1 overflow-hidden">
+                    <div>> ALL SYSTEMS NOMINAL.</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER: INTEGRATED CORE & CHAT -->
+        <main class="center-hub relative">
+            <div class="arc-container">
+                <div class="arc-reactor-small">
+                    <div class="ring r-outer"></div>
+                    <div class="ring r-inner"></div>
+                    <div class="core-dot"></div>
+                </div>
+                <div class="flex-1">
+                    <div class="text-3xl font-bold tracking-tighter text-white">J.A.R.V.I.S.</div>
+                    <div class="text-[0.6rem] opacity-50 tracking-[0.4em]">OMNI-GRID MARK IX INTERFACE</div>
+                    <div class="flex gap-4 mt-2">
+                        <div class="status-pill border border-[#00FF66] text-[#00FF66] px-2 py-0.5 text-[0.5rem]">CORE: OPTIMAL</div>
+                        <div class="status-pill border border-cyan-500 text-cyan-500 px-2 py-0.5 text-[0.5rem]">SECURE_LINK: ACTIVE</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="w-10 h-10 border border-cyan-500/30 flex items-center justify-center text-[0.5rem] hover:bg-cyan-500/20 cursor-pointer">DIAG</div>
+                    <div class="w-10 h-10 border border-cyan-500/30 flex items-center justify-center text-[0.5rem] hover:bg-cyan-500/20 cursor-pointer">NET</div>
+                </div>
+            </div>
+
+            <section class="chat-terminal">
+                <div class="fui-header border-none mb-2"><span>MISSION_DIALOGUE_FEED</span></div>
+                <div id="chat-history" class="chat-history">
+                    <div class="msg-jarvis">SYSTEM INITIALIZED. READY FOR COMMAND, SIR.</div>
+                </div>
+
+                <div class="input-wrapper">
+                    <div class="waveform" id="mic-viz"></div>
+                    <input type="text" id="cmd-input" placeholder="ACCESS TERMINAL..." class="cmd-input" autocomplete="off">
+                </div>
+            </section>
+        </main>
+
+        <!-- RIGHT: KNOWLEDGE & INSIGHTS -->
+        <aside class="fui-panel">
+            <div class="fui-header"><span>INTELLIGENCE_BASE</span></div>
+
+            <div class="sub-panel">
+                <div class="text-[0.65rem] font-bold text-white mb-2">ACTIVE KNOWLEDGE NODES</div>
+                <div class="text-[0.6rem] opacity-60 leading-relaxed">
+                    > LOCAL_FS_INDEXING [COMPLETE]<br>
+                    > NEURAL_ROUTING: QWEN_3_14B<br>
+                    > GLOBAL_RECON_ACTIVE
+                </div>
+            </div>
+
+            <div class="sub-panel border-amber-500/40">
+                <div class="fui-header border-none text-[0.6rem] mb-1 text-amber-500"><span>INTEL_INSIGHTS</span></div>
+                <div class="text-[0.65rem] italic opacity-80" id="insight">
+                    MONITORING SYSTEM REPOSITORIES FOR OPTIMIZATION PATHS.
+                </div>
+            </div>
+
+            <div class="flex-1 fui-panel !bg-transparent !border-none !p-0">
+                <div class="fui-header"><span>COMM_CHANNELS</span></div>
+                <div class="text-[0.6rem] space-y-2">
+                    <div class="flex justify-between"><span>INBOX_STATUS</span><span class="text-[#00FF66]">14 NEW</span></div>
+                    <div class="flex justify-between"><span>SECURITY_ALERTS</span><span class="text-white">0 FOUND</span></div>
+                </div>
+            </div>
+
+            <div class="sub-panel h-24 flex items-center justify-center">
+                <canvas id="threat-wave" width="300" height="40"></canvas>
+            </div>
+        </aside>
+
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        // 1. Telemetry Link
+        let telemetrySocket = null;
+        let retryCount = 0;
+
+        function initLink() {
+            if (telemetrySocket) {
+                try { telemetrySocket.close(); } catch(e) {}
+            }
+
+            const indicator = document.getElementById('link-indicator');
+            indicator.textContent = `LINK: SYNCING... (${retryCount})`;
+
+            // Try 127.0.0.1 first, then localhost
+            const host = retryCount % 2 === 0 ? '127.0.0.1' : 'localhost';
+            telemetrySocket = new WebSocket(`ws://${host}:8765/ws/telemetry`);
+
+            telemetrySocket.onopen = () => {
+                console.log('Telemetry link established');
+                indicator.textContent = 'LINK: ONLINE';
+                indicator.style.color = '#00FF66';
+                retryCount = 0;
+            };
+
+            telemetrySocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    // Update CPU
+                    const cpuBar = document.getElementById('cpu-bar');
+                    const cpuVal = document.getElementById('cpu-val');
+                    if (cpuBar) cpuBar.style.width = `${data.cpu.usage}%`;
+                    if (cpuVal) cpuVal.innerText = `${Math.round(data.cpu.usage)}%`;
+
+                    // Update RAM
+                    const ramBar = document.getElementById('ram-bar');
+                    const ramVal = document.getElementById('ram-val');
+                    if (ramBar) ramBar.style.width = `${data.ram.percent}%`;
+                    if (ramVal) ramVal.innerText = `${Math.round(data.ram.percent)}%`;
+
+                    // Update GPU if available
+                    if (data.gpu && data.gpu.available) {
+                        const gpuPanel = document.getElementById('gpu-panel');
+                        if (gpuPanel) gpuPanel.style.display = 'block';
+                        const gpuLabel = document.getElementById('gpu-label');
+                        if (gpuLabel) gpuLabel.innerText = data.gpu.name ? `${data.gpu.name} LOAD` : 'GPU_USAGE';
+                        const gpuBar = document.getElementById('gpu-bar');
+                        const gpuVal = document.getElementById('gpu-val');
+                        if (gpuBar) gpuBar.style.width = `${Math.round(data.gpu.usage)}%`;
+                        if (gpuVal) gpuVal.innerText = `${Math.round(data.gpu.usage)}%`;
+                    }
+
+                    // Update news feed
+                    if (data.news && data.news.length > 0) {
+                        updateNews(data.news);
+                    }
+                } catch (e) {
+                    console.error('Telemetry parse error:', e);
+                }
+            };
+
+            telemetrySocket.onerror = (err) => {
+                console.warn('Telemetry link error');
+                indicator.textContent = 'LINK: OFFLINE';
+                indicator.style.color = 'var(--fui-amber)';
+            };
+
+            telemetrySocket.onclose = () => {
+                indicator.textContent = 'LINK: OFFLINE';
+                indicator.style.color = 'var(--fui-amber)';
+                retryCount++;
+                setTimeout(initLink, 3000);
+            };
+        }
+
+        function updateNews(items) {
+            const feed = document.getElementById('news-feed');
+            if (!feed) return;
+            feed.innerHTML = items.map(item => `
+                <div class="border-l border-cyan-500 pl-2 mb-1 animate-pulse">> ${item}</div>
+            `).join('');
+        }
+
+        // 2. Chat Logic
+        const input = document.getElementById('cmd-input');
+        const history = document.getElementById('chat-history');
+
+        function addMessage(role, text, results = null) {
+            if (!text && !results) return;
+
+            const div = document.createElement('div');
+            div.className = role === 'user' ? 'msg-user' : 'msg-jarvis';
+            div.style.wordBreak = 'break-word';
+            div.style.overflowWrap = 'break-word';
+            div.style.marginBottom = '15px';
+
+            try {
+                if (role === 'jarvis') {
+                    // Robust parsing of JARVIS response blocks
+                    let content = text;
+                    if (content.length > 10000) {
+                        content = content.substring(0, 10000) + "... [CONTENT TRUNCATED FOR STABILITY]";
+                    }
+
+                    let formatted = content
+                        .replace(/### Understanding/g, '<h3>UNDERSTANDING</h3>')
+                        .replace(/### Plan/g, '<h3>PLAN</h3>')
+                        .replace(/### Agents Used/g, '<h3>AGENTS USED</h3>');
+
+                    // Close tags properly even if blocks are missing
+                    if (formatted.includes('### Result')) {
+                        if (formatted.includes('### Next Best Action')) {
+                            formatted = formatted.replace(/### Result/g, '<h3>RESULT</h3><div class="msg-result">')
+                                                 .replace(/### Next Best Action/g, '</div><h3>NEXT BEST ACTION</h3>');
+                        } else {
+                            formatted = formatted.replace(/### Result/g, '<h3>RESULT</h3><div class="msg-result">') + '</div>';
+                        }
+                    }
+
+                    div.innerHTML = `<div>${formatted.replace(/\n/g, '<br>')}</div>`;
+                } else {
+                    div.innerHTML = `<div>SIR: ${text.replace(/\n/g, '<br>')}</div>`;
+                }
+
+                if (results && results.length > 0) {
+                    const resDiv = document.createElement('div');
+                    resDiv.className = 'tool-data';
+
+                    results.forEach((result, idx) => {
+                        if (!result.success) {
+                            const errDiv = document.createElement('div');
+                            errDiv.style.color = '#ff4444';
+                            errDiv.textContent = `ERROR [Action ${idx+1}]: ${result.error}`;
+                            resDiv.appendChild(errDiv);
+                            return;
+                        }
+
+                        if (Array.isArray(result.data) && result.data.length > 0 && result.data[0].sizeHuman) {
+                            let table = '<table style="width:100%; text-align:left; border-collapse:collapse; font-size:0.9em;">';
+                            table += '<tr style="border-bottom:1px solid var(--fui-cyan); opacity:0.5;"><th>NAME</th><th>SIZE</th></tr>';
+                            const items = result.data.slice(0, 15);
+                            items.forEach(item => {
+                                table += `<tr><td>${item.isDirectory ? '📁' : '📄'} ${item.name}</td><td>${item.sizeHuman}</td></tr>`;
+                            });
+                            if (result.data.length > 15) table += `<tr><td colspan="2">... AND ${result.data.length - 15} MORE</td></tr>`;
+                            table += '</table>';
+                            const tableDiv = document.createElement('div');
+                            tableDiv.innerHTML = table;
+                            resDiv.appendChild(tableDiv);
+                        } else if (result.data.results) {
+                            let list = '<div style="color:var(--fui-cyan); font-weight:bold; margin-bottom:5px;">INTEL RETRIEVED:</div>';
+                            result.data.results.forEach((res, i) => {
+                                list += `
+                                    <div style="margin-bottom:8px; border-bottom:1px solid rgba(0,243,255,0.1); padding-bottom:4px;">
+                                        <div style="font-weight:bold; color:var(--fui-amber); font-size:0.75rem;">${i+1}. ${res.title}</div>
+                                        <div style="font-size:0.65rem; opacity:0.8;">${res.snippet.substring(0, 150)}${res.snippet.length > 150 ? '...' : ''}</div>
+                                        <div style="font-size:0.55rem; color:var(--fui-cyan); opacity:0.7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration: underline; cursor: pointer;" onclick="require('electron').shell.openExternal('${res.url}')">${res.url}</div>
+                                    </div>`;
+                            });
+                            const listDiv = document.createElement('div');
+                            listDiv.innerHTML = list;
+                            resDiv.appendChild(listDiv);
+                        } else if (result.data.base64) {
+                            const imgContainer = document.createElement('div');
+                            imgContainer.innerHTML = `
+                                <div style="color:var(--fui-cyan); font-weight:bold; margin-bottom:5px;">OPTICAL CAPTURE ACQUIRED:</div>
+                                <img src="data:image/png;base64,${result.data.base64}" style="width:100%; border:1px solid var(--fui-cyan); filter: contrast(1.2) brightness(0.8);">
+                            `;
+                            resDiv.appendChild(imgContainer);
+                        } else if (result.data.abstract) {
+                            const absDiv = document.createElement('div');
+                            absDiv.innerHTML = `<div style="color:var(--fui-cyan); font-weight:bold;">INTEL RETRIEVED:</div><div>"${result.data.abstract}"</div>`;
+                            resDiv.appendChild(absDiv);
+                        } else if (typeof result.data === 'string') {
+                            const strDiv = document.createElement('div');
+                            strDiv.textContent = result.data;
+                            resDiv.appendChild(strDiv);
+                        } else if (result.message) {
+                            const msgDiv = document.createElement('div');
+                            msgDiv.textContent = result.message;
+                            resDiv.appendChild(msgDiv);
+                        }
+                    });
+
+                    div.appendChild(resDiv);
+                }
+            } catch (e) {
+                console.error("Message render error:", e);
+                div.textContent = "[SYSTEM ERROR IN RENDERER]";
+            }
+
+            history.appendChild(div);
+
+            // Auto-scroll to bottom with smooth behavior
+            requestAnimationFrame(() => {
+                history.scrollTop = history.scrollHeight;
+            });
+        }
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && input.value) {
+                const val = input.value;
+                addMessage('user', val);
+                ipcRenderer.send('voice-input', val);
+                input.value = '';
+
+                // Ensure scroll to bottom after user message is added
+                requestAnimationFrame(() => {
+                    history.scrollTop = history.scrollHeight;
+                });
+
+                const log = document.getElementById('threat-log');
+                const logEntry = document.createElement('div');
+                logEntry.textContent = `> EXECUTING: ${val.substring(0, 20)}...`;
+                log.prepend(logEntry);
+            }
+        });
+
+        // Auto-scroll to bottom when input field is focused
+        input.addEventListener('focus', () => {
+            requestAnimationFrame(() => {
+                history.scrollTop = history.scrollHeight;
+            });
+        });
+
+        ipcRenderer.on('voice-input-response', (event, data) => {
+            if (data.response) {
+                addMessage('jarvis', data.response, data.results);
+                
+                // Ensure scroll reaches the bottom after message is added
+                setTimeout(() => {
+                    history.scrollTop = history.scrollHeight;
+                }, 50);
+                
+                // Note: TTS is handled by the main process (TTSService) for better system integration
+            }
+        });
+
+        // 3. Visualizers & Voice
+        const micViz = document.getElementById('mic-viz');
+        for(let i=0; i<10; i++) {
+            const b = document.createElement('div');
+            b.className = 'wave-bar';
+            micViz.appendChild(b);
+        }
+
+        let micActive = false;
+        function animateMic() {
+            micViz.childNodes.forEach(b => {
+                if(b.style) {
+                    const base = micActive ? 20 : 5;
+                    const rand = micActive ? 60 : 10;
+                    b.style.height = `${base + Math.random()*rand}%`;
+                    b.style.opacity = micActive ? '1' : '0.3';
+                }
+            });
+            requestAnimationFrame(animateMic);
+        }
+        animateMic();
+
+        function initVoice() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.warn('VOICE_LINK: SPEECH RECOGNITION NOT SUPPORTED');
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                micActive = true;
+                const log = document.getElementById('threat-log');
+                const entry = document.createElement('div');
+                entry.textContent = '> VOICE_LINK: ONLINE';
+                log.prepend(entry);
+            };
+
+            recognition.onresult = (event) => {
+                const result = event.results[event.results.length - 1];
+                const transcript = result[0].transcript.trim().toLowerCase();
+                const wakeWord = 'jarvis';
+
+                if (result.isFinal && transcript.length > 2) {
+                    if (transcript.includes(wakeWord)) {
+                        const parts = transcript.split(wakeWord);
+                        const command = parts[parts.length - 1].trim();
+
+                        if (command && command.length > 1) {
+                            addMessage('user', command);
+                            ipcRenderer.send('voice-input', command);
+
+                            const log = document.getElementById('threat-log');
+                            const entry = document.createElement('div');
+                            entry.textContent = `> VOICE_INPUT: ${command.toUpperCase()}`;
+                            log.prepend(entry);
+                        }
+                    }
+                }
+            };
+
+            recognition.onerror = (err) => {
+                if (err.error !== 'no-speech') {
+                    console.error('VOICE_LINK_ERROR:', err.error);
+                }
+            };
+
+            recognition.onend = () => {
+                micActive = false;
+                // Auto-restart for always-listening mode
+                setTimeout(() => {
+                    try { recognition.start(); } catch(e) {}
+                }, 100);
+            };
+
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error('VOICE_START_FAILED:', e);
+            }
+        }
+
+        const clock = document.getElementById('clock');
+        setInterval(() => { clock.textContent = new Date().toTimeString().split(' ')[0]; }, 1000);
+
+        const canvas = document.getElementById('threat-wave');
+        const ctx = canvas.getContext('2d');
+        let offset = 0;
+        function drawWave() {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            ctx.strokeStyle = '#00F3FF';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let x=0; x<canvas.width; x++) {
+                let y = canvas.height/2 + Math.sin(x*0.05 + offset) * 10;
+                ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            offset += 0.15;
+            requestAnimationFrame(drawWave);
+        }
+        drawWave();
+
+        // Fetch news via local SearXNG instance (Docker on :8081)
+        async function fetchNewsDirectly() {
+            try {
+                const res = await fetch(
+                    'http://localhost:8081/search?q=world+news+today&categories=news&format=json'
+                );
+                const data = await res.json();
+                const headlines = (data.results || [])
+                    .slice(0, 6)
+                    .map((r) => r.title?.trim().toUpperCase())
+                    .filter(Boolean);
+                if (headlines.length > 0) updateNews(headlines);
+            } catch (e) {
+                console.error('News fetch failed:', e);
+            }
+        }
+
+        // 4. IPC Listeners
+        ipcRenderer.on('ollama-status', (event, data) => {
+            const nodes = document.querySelector('.sub-panel .text-\\[0\\.6rem\\]');
+            if (nodes) {
+                const status = data.online ? '[ACTIVE]' : '[OFFLINE]';
+                nodes.innerHTML = `
+                    > LOCAL_FS_INDEXING [COMPLETE]<br>
+                    > NEURAL_ROUTING: ${data.model} ${status}<br>
+                    > GLOBAL_RECON_ACTIVE
+                `;
+            }
+        });
+
+        ipcRenderer.on('status-update', (event, message) => {
+            const log = document.getElementById('threat-log');
+            if (log) {
+                const entry = document.createElement('div');
+                entry.textContent = `> ${message.toUpperCase()}`;
+                log.prepend(entry);
+                if (log.childNodes.length > 10) log.removeChild(log.lastChild);
+            }
+        });
+
+        // 5. Approval Flow
+        const overlay = document.getElementById('approval-overlay');
+        const toolEl = document.getElementById('approval-tool');
+        const reasonEl = document.getElementById('approval-reason');
+        const approveBtn = document.getElementById('approve-btn');
+        const denyBtn = document.getElementById('deny-btn');
+
+        ipcRenderer.on('approval-request', (event, data) => {
+            toolEl.textContent = data.toolName.toUpperCase();
+            reasonEl.textContent = data.reason || 'SENSITIVE OPERATION DETECTED';
+            overlay.classList.remove('hidden');
+
+            // Bring window to front if possible
+            ipcRenderer.send('focus-window');
+        });
+
+        approveBtn.addEventListener('click', () => {
+            overlay.classList.add('hidden');
+            ipcRenderer.send('approval-response', 'approved');
+        });
+
+        denyBtn.addEventListener('click', () => {
+            overlay.classList.add('hidden');
+            ipcRenderer.send('approval-response', 'denied');
+        });
+
+        fetchNewsDirectly();
+        setInterval(fetchNewsDirectly, 300000); // refresh every 5 min
+
+        initLink();
+        initVoice();
+    </script>
+</body>
+</html>
