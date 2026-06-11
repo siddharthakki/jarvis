@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JARVIS HUD - INTEGRATED MARK IX</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;400;500;700&family=JetBrains+Mono:wght@300&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -496,7 +497,7 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
+        // Electron security: ipcRenderer is now accessed via window.jarvis bridge
 
         // 1. Telemetry Link
         let telemetrySocket = null;
@@ -638,29 +639,16 @@
 
             try {
                 if (role === 'jarvis') {
-                    let content = text;
-                    if (content.length > 10000) {
-                        content = content.substring(0, 10000) + "... [CONTENT TRUNCATED]";
-                    }
+                    // 1. Clean the response (Hide internal headers and raw JSON)
+                    let cleanText = text.replace(/```json[\s\S]*?```/g, '')
+                                        .replace(/### (Understanding|Plan|Agents Used|Next Best Action)[\s\S]*?(?=###|$)/gi, '')
+                                        .replace(/### Result/gi, '')
+                                        .trim();
 
-                    // Remove raw JSON from the display entirely
-                    content = content.replace(/```json[\s\S]*?```/g, '').trim();
-                    if (!content && results) content = "Executing requested actions, Sir.";
+                    if (!cleanText && results) cleanText = "Analysis complete, Sir.";
 
-                    let formatted = content
-                        .replace(/### Understanding/g, '<h3>UNDERSTANDING</h3>')
-                        .replace(/### Plan/g, '<h3>PLAN</h3>')
-                        .replace(/### Agents Used/g, '<h3>AGENTS USED</h3>');
-
-                    if (formatted.includes('### Result')) {
-                        // Extract only the result if it exists to simplify the bubble
-                        const resultMatch = formatted.match(/### Result\s*([\s\S]*?)(?:###|$)/i);
-                        if (resultMatch) {
-                            formatted = `<div class="msg-result">${resultMatch[1].trim()}</div>`;
-                        }
-                    }
-
-                    div.innerHTML = `<div>${formatted.replace(/\n/g, '<br>')}</div>`;
+                    // 2. Render Markdown
+                    div.innerHTML = marked.parse(cleanText);
                 } else {
                     div.innerHTML = `<div>${text.replace(/\n/g, '<br>')}</div>`;
                 }
@@ -668,8 +656,12 @@
                 container.appendChild(div);
 
                 if (results && results.length > 0) {
+                    const details = document.createElement('details');
+                    details.className = 'mt-2 opacity-50 text-[0.6rem] cursor-pointer w-full max-w-[85%]';
+                    details.innerHTML = `<summary>VIEW_TECHNICAL_INTEL (${results.length}_ACTIONS)</summary>`;
+
                     const resDiv = document.createElement('div');
-                    resDiv.className = 'tool-data w-full max-w-[85%]';
+                    resDiv.className = 'tool-data w-full mt-2';
                     // (Rendering logic preserved below)
 
                     results.forEach((result, idx) => {
@@ -728,7 +720,8 @@
                         }
                     });
 
-                    container.appendChild(resDiv);
+                    details.appendChild(resDiv);
+                    container.appendChild(details);
                 }
 
                 const timestamp = document.createElement('div');
@@ -755,7 +748,7 @@
             if (e.key === 'Enter' && input.value) {
                 const val = input.value;
                 addMessage('user', val);
-                ipcRenderer.send('voice-input', val);
+                window.jarvis.sendVoiceInput(val);
                 input.value = '';
 
                 // Ensure scroll to bottom after user message is added
@@ -780,7 +773,7 @@
         // Mute mic while Jarvis is speaking to prevent echo
         window.jarvisIsSpeaking = false;
         let ttsMuteTimer = null;
-        ipcRenderer.on('tts-start', (_, estimatedMs) => {
+        window.jarvis.onTtsStart((estimatedMs) => {
             window.jarvisIsSpeaking = true;
             // Flush bridge.py's audio buffer so stale audio doesn't get transcribed
             if (window.whisperWS && window.whisperWS.readyState === WebSocket.OPEN) {
@@ -789,13 +782,13 @@
             if (ttsMuteTimer) clearTimeout(ttsMuteTimer);
             ttsMuteTimer = setTimeout(() => { window.jarvisIsSpeaking = false; }, estimatedMs || 5000);
         });
-        ipcRenderer.on('tts-end', () => {
+        window.jarvis.onTtsEnd(() => {
             // Extend by 1s after callback fires — tail of audio still in the room
             if (ttsMuteTimer) clearTimeout(ttsMuteTimer);
             ttsMuteTimer = setTimeout(() => { window.jarvisIsSpeaking = false; }, 1000);
         });
 
-        ipcRenderer.on('voice-input-response', (event, data) => {
+        window.jarvis.onVoiceInputResponse((data) => {
             if (data.response) {
                 addMessage('jarvis', data.response, data.results);
                 
@@ -871,7 +864,7 @@
             const command = stripped || lower;
             if (command.length > 2) {
                 addMessage('user', command);
-                ipcRenderer.send('voice-input', command);
+                window.jarvis.sendVoiceInput(command);
                 if (agentStatus) agentStatus.textContent = 'PROCESSING COMMAND...';
                 logVoice(`> VOICE_INPUT: ${command.toUpperCase()}`);
             }
@@ -927,7 +920,7 @@
             if (!window.voiceActive) return;
 
             // Check config for STT engine preference
-            ipcRenderer.invoke('jarvis:get-config').then(config => {
+            window.jarvis.getConfig().then(config => {
                 if (config && config.sttEngine === 'faster-whisper') {
                     initWhisperSTT();
                     return;
@@ -1015,7 +1008,7 @@
         }
 
         // 4. IPC Listeners
-        ipcRenderer.on('ollama-status', (event, data) => {
+        window.jarvis.onOllamaStatus((data) => {
             const nodes = document.querySelector('.sub-panel .text-\\[0\\.6rem\\]');
             if (nodes) {
                 const status = data.online ? '[ACTIVE]' : '[OFFLINE]';
@@ -1027,7 +1020,7 @@
             }
         });
 
-        ipcRenderer.on('status-update', (event, message) => {
+        window.jarvis.onStatusUpdate((message) => {
             if (agentStatus) {
                 agentStatus.textContent = message.toUpperCase();
             }
@@ -1046,24 +1039,32 @@
         const reasonEl = document.getElementById('approval-reason');
         const approveBtn = document.getElementById('approve-btn');
         const denyBtn = document.getElementById('deny-btn');
+        let currentRequestId = null;
 
-        ipcRenderer.on('approval-request', (event, data) => {
+        window.jarvis.onApprovalRequest((data) => {
+            currentRequestId = data.requestId;
             toolEl.textContent = data.toolName.toUpperCase();
             reasonEl.textContent = data.reason || 'SENSITIVE OPERATION DETECTED';
             overlay.classList.remove('hidden');
 
             // Bring window to front if possible
-            ipcRenderer.send('focus-window');
+            window.jarvis.focusWindow();
         });
 
         approveBtn.addEventListener('click', () => {
-            overlay.classList.add('hidden');
-            ipcRenderer.send('approval-response', 'approved');
+            if (currentRequestId) {
+                overlay.classList.add('hidden');
+                window.jarvis.sendApprovalResponse(currentRequestId, 'approved');
+                currentRequestId = null;
+            }
         });
 
         denyBtn.addEventListener('click', () => {
-            overlay.classList.add('hidden');
-            ipcRenderer.send('approval-response', 'denied');
+            if (currentRequestId) {
+                overlay.classList.add('hidden');
+                window.jarvis.sendApprovalResponse(currentRequestId, 'denied');
+                currentRequestId = null;
+            }
         });
 
         // 6. Runtime Configuration
@@ -1071,12 +1072,12 @@
             const panel = document.getElementById('settings-panel');
             if (panel.classList.contains('hidden')) {
                 // Load current config
-                const config = await ipcRenderer.invoke('jarvis:get-config');
+                const config = await window.jarvis.getConfig();
                 document.getElementById('config-voice').value = config.ttsVoice;
 
                 // Populate model dropdown from ollama list
                 const select = document.getElementById('config-model');
-                const models = await ipcRenderer.invoke('jarvis:get-ollama-models');
+                const models = await window.jarvis.getOllamaModels();
                 select.innerHTML = '';
                 if (models.length === 0) {
                     select.innerHTML = '<option value="">-- NO MODELS FOUND --</option>';
@@ -1114,9 +1115,9 @@
                 }
             }
 
-            await ipcRenderer.invoke('jarvis:set-config', 'model', model);
-            await ipcRenderer.invoke('jarvis:set-config', 'ttsVoice', ttsVoice);
-            await ipcRenderer.invoke('jarvis:set-config', 'sttEngine', sttEngine);
+            await window.jarvis.setConfig('model', model);
+            await window.jarvis.setConfig('ttsVoice', ttsVoice);
+            await window.jarvis.setConfig('sttEngine', sttEngine);
 
             const log = document.getElementById('threat-log');
             const entry = document.createElement('div');

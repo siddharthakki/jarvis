@@ -1,5 +1,6 @@
 import { Tool, ToolContext, ToolResult } from './ToolTypes';
 import { ToolRegistry } from './ToolRegistry';
+import { BridgeAuth } from '../config/BridgeAuth';
 
 /**
  * Computer Control Tool - Direct mouse and keyboard control via bridge.py
@@ -49,7 +50,7 @@ export const computerControlTool: Tool = {
     },
     required: ['action']
   },
-  riskLevel: 'medium',
+  riskLevel: 'high',
   mutatesWorkspace: false,
   requiresWorkspace: false,
   async execute(args: Record<string, unknown>, context?: ToolContext): Promise<ToolResult> {
@@ -58,13 +59,19 @@ export const computerControlTool: Tool = {
     try {
       status?.(`Executing computer control action: ${args.action}...`);
 
-      const response = await fetch('http://localhost:8765/control', {
+      const response = await fetch('http://127.0.0.1:8765/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(args)
+        body: JSON.stringify({
+          ...args,
+          token: BridgeAuth.getToken()
+        })
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Bridge API error: Unauthorized. Check bridge token.');
+        }
         throw new Error(`Bridge API error: ${response.status}`);
       }
 

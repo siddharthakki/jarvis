@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p .",
     "watch": "tsc -w -p .",
+    "typecheck": "tsc --noEmit",
     "start": "npm run build && electron .",
     "dev": "tsc -p . && electron .",
     "test": "jest"

@@ -1,5 +1,6 @@
 import { Tool, ToolContext, ToolResult } from './ToolTypes';
 import { ToolRegistry } from './ToolRegistry';
+import { Config } from '../config/Config';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -15,7 +16,19 @@ const ALLOWED_ROOTS = [
 
 function isPathAllowed(filePath: string): boolean {
   const resolved = path.resolve(filePath);
-  return ALLOWED_ROOTS.some(root => resolved.startsWith(path.resolve(root)));
+  const config = Config.getInstance();
+  const workspaceRoot = config.get('workspaceRoot');
+
+  const roots = [...ALLOWED_ROOTS];
+  if (workspaceRoot) roots.push(workspaceRoot);
+
+  return roots.some(root => {
+    const resolvedRoot = path.resolve(root);
+    const relative = path.relative(resolvedRoot, resolved);
+    // If the path is the same as the root, relative will be an empty string.
+    // If the path is inside the root, relative will not start with '..' and won't be absolute.
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  });
 }
 
 // File reading tool

@@ -1,1 +1,8 @@
-node_modules
+node_modules/
+dist/
+.env
+credentials.env
+*.log
+.jarvis/
+generated/
+temp_vision_capture.png

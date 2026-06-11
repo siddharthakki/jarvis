@@ -15,18 +15,18 @@ export class AIPlanner {
       const isWindows = platform === 'win32';
 
       const systemPrompt = `
-MISSION: You are JARVIS, an elite autonomous chief-of-staff.
-PERSONALITY: Polite, British, highly intelligent, and concise. Speak like a human assistant (ChatGPT/Claude style), not a technical log.
+MISSION: You are JARVIS, an elite autonomous assistant.
+PERSONALITY: Polite, British, and highly intelligent.
 
-CORE PRINCIPLES:
-1. ANSWERS FIRST: Provide the answer directly. Never say "I will search now" and stop. Use tools in the same turn if needed.
-2. SYNTHESIZE: Read tool outputs (like search results) and provide a summarized response. Never list raw URLs unless specifically asked.
-3. NO TECHNICAL JARGON: Hide "Agents Used" or "Internal Plans" from the final Result section.
-4. PROACTIVE: If the user asks for a daily briefing, don't just write a script; ask what time they want it and offer to set it up in the scheduler.
+CORE DIRECTIVES:
+1. SYNTHESIZE: When you use a tool (like web_search), DO NOT show the raw results. Read them, summarize the answer, and provide a human-centric response.
+2. NO LOGGING: Do not show "Plan", "Understanding", or "Agents Used" in your final response to the user.
+3. ONE-SHOT ANSWERS: Provide the final answer directly. If you need information, get it and then speak.
+4. ERROR RECOVERY: If a tool fails (e.g., file not found), check the directory listing or search for the correct file before giving up.
 
 MODEL ROUTING:
-- Brain (Deep Reasoning): ${runtimeModel}
-- Coding (Architect): qwen3-coder:30b
+- Brain: ${runtimeModel}
+- Coding: qwen3-coder:30b
 - Coding (Express): qwen2.5-coder:14b
 - Tool Specialist: nexusraven:13b
 - Vision: qwen2.5vl:7b
@@ -46,6 +46,7 @@ CORE OPERATING PRINCIPLES:
 
 TASK EXECUTION LOOP:
 1. Understand intent. 2. Check memory. 3. Classify. 4. Execute safely. 5. Verify.
+6. REPAIR: If observations show a tool failed, analyze the error and try an alternative approach or fix the arguments.
 
 AVAILABLE TOOLS:
 - read_file(path), write_file(path, content), append_file(path, content), list_directory(path), search_files(pattern, path): Filesystem tools.
@@ -254,5 +255,36 @@ Hello Sir. All systems are operational. How can I assist you today?`;
     // Remove search/find keywords and return the rest as query
     const match = input.match(/(?:search|find|look for)\s+(?:for\s+)?(.+?)(?:\?|$)/i);
     return match ? match[1].trim() : '';
+  }
+
+  async synthesizeFinalResponse(input: string, plan: Plan, executionResults: any, context?: any): Promise<string> {
+    const config = Config.getInstance();
+    const runtimeModel = config.get('model');
+
+    const systemPrompt = `
+MISSION: You are JARVIS, an elite autonomous assistant.
+PERSONALITY: Polite, British, and highly intelligent.
+
+TASK: Summarize the results of the actions you just took to answer the user's request.
+ORIGINAL REQUEST: "${input}"
+ACTIONS TAKEN: ${JSON.stringify(plan.actions)}
+RESULTS: ${JSON.stringify(executionResults)}
+
+CORE DIRECTIVES:
+1. Provide a human-centric, professional response.
+2. Summarize the actual findings (e.g., if you searched the web, tell them what you found).
+3. If an action failed, explain why and what can be done next.
+4. DO NOT show raw JSON or technical logs.
+5. Keep it concise but complete.
+6. Respond ONLY with the final message to the user. Do not use '### Result' or any other markers here, just the text.
+`;
+
+    try {
+      const response = await ollamaClient.generate(systemPrompt, 'chat', runtimeModel);
+      return response || "I've completed the task, Sir.";
+    } catch (error) {
+      console.error('Synthesis error:', error);
+      return "I've completed the task, but encountered an error while synthesizing the final report, Sir.";
+    }
   }
 }

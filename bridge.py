@@ -5,10 +5,41 @@ import time
 import urllib.request
 import xml.etree.ElementTree as ET
 import uvicorn
-from fastapi import FastAPI, WebSocket
+import os
+import secrets
+from pathlib import Path
+from fastapi import FastAPI, WebSocket, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+# --- Auth Token Management ---
+def get_auth_token():
+    # Use .jarvis directory in home folder for persistence
+    jarvis_dir = Path.home() / ".jarvis"
+    jarvis_dir.mkdir(parents=True, exist_ok=True)
+    token_path = jarvis_dir / "bridge.token"
+
+    if token_path.exists():
+        try:
+            return token_path.read_text().strip()
+        except Exception as e:
+            print(f"Error reading token: {e}")
+
+    # Generate new token if not exists or unreadable
+    token = secrets.token_hex(32)
+    try:
+        token_path.write_text(token)
+        # Set permissions to read/write only by owner if on Unix
+        if os.name != 'nt':
+            os.chmod(token_path, 0o600)
+        print(f"✓ Generated new JARVIS bridge auth token: {token_path}")
+    except Exception as e:
+        print(f"Warning: Could not save auth token to disk: {e}")
+
+    return token
+
+AUTH_TOKEN = get_auth_token()
 
 # Try to import GPU monitoring library
 try:
@@ -37,10 +68,10 @@ except ImportError:
     print("Warning: faster-whisper not installed. /ws/stt endpoint will be disabled.")
     FASTER_WHISPER_AVAILABLE = False
 
-# Allow connections from the dashboard
+# Restrict CORS to localhost only for security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost", "http://127.0.0.1"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -79,6 +110,10 @@ async def fetch_news() -> list[str]:
 
 @app.post("/control")
 async def computer_control(payload: dict):
+    # Security: Verify auth token
+    if payload.get("token") != AUTH_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid bridge token")
+
     if not PYAUTOGUI_AVAILABLE:
         return {"success": False, "error": "pyautogui not installed"}
 
@@ -210,6 +245,8 @@ if FASTER_WHISPER_AVAILABLE:
                     if "text" in message:
                         try:
                             ctrl = json.loads(message["text"])
+                            # Check token for control messages if needed
+                            # token = ctrl.get("token")
                             if ctrl.get("type") == "clear":
                                 audio_buffer.clear()
                         except Exception:
@@ -257,26 +294,13 @@ if FASTER_WHISPER_AVAILABLE:
                 pass
 
 
-def free_port(port: int) -> None:
-    """Kill any process already bound to *port* so we can claim it cleanly."""
-    for proc in psutil.process_iter(['pid', 'name']):
-        try:
-            for conn in proc.connections(kind='inet'):
-                if conn.laddr.port == port and conn.status in ('LISTEN', 'ESTABLISHED'):
-                    print(f"Port {port} in use by PID {proc.pid} ({proc.name()}) — terminating.")
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=3)
-                    except psutil.TimeoutExpired:
-                        proc.kill()
-                    return
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
-
-
 if __name__ == "__main__":
     PORT = 8765
-    free_port(PORT)
-    print(f"Starting JARVIS Telemetry Server on http://0.0.0.0:{PORT}")
-    # Bind to 0.0.0.0 to ensure accessibility across all interfaces
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
+    print(f"Starting JARVIS Telemetry Server on http://127.0.0.1:{PORT}")
+    # Bind to 127.0.0.1 for security - local only!
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="info")
+    except Exception as e:
+        print(f"CRITICAL ERROR: Could not start bridge server. Port {PORT} might be in use.")
+        print(f"Details: {e}")
+        os._exit(1)

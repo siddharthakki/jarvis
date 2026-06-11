@@ -55,26 +55,80 @@ private speakCallback?: (text: string) => void;
     
     const fullContext = {
       recentHistory: trimmedHistory,
+      relevantKnowledge: relevantKnowledge,
       ...context
     };
 
     this.statusCallback?.('Processing your request...');
 
-    // Process user input through the agent pipeline
-    const plan = await this.planner.plan(input, fullContext, this.statusCallback);
-    const executionResults = await this.executePlan(plan);
+    let iterations = 0;
+    const maxIterations = 3;
+    let observations: any[] = [];
+    let lastPlan: Plan | null = null;
+    let allExecutionResults: any[] = [];
+
+    while (iterations < maxIterations) {
+      iterations++;
+
+      const currentContext = {
+        ...fullContext,
+        observations
+      };
+
+      const plan = await this.planner.plan(input, currentContext, this.statusCallback);
+      lastPlan = plan;
+
+      // If no actions, we are done
+      if (!plan.actions || plan.actions.length === 0) {
+        break;
+      }
+
+      // Execute current plan actions
+      const results = await this.executePlan(plan);
+      allExecutionResults.push(...results);
+
+      observations.push({
+        iteration: iterations,
+        plan: plan.actions,
+        results: results
+      });
+
+      // Simple heuristic: if all actions in this iteration succeeded,
+      // and it's a simple task, we might not need to loop back to the model.
+      // But for a true ReAct loop, we should let the model see the results.
+      // However, to avoid unnecessary calls for simple tasks:
+      const allSucceeded = results.every((r: any) => r.success !== false);
+
+      // If the model provided a response AND all tools succeeded,
+      // it's likely it considers this the final step.
+      if (allSucceeded && plan.response && plan.response.includes('### Result')) {
+        // One more check: if it's the first iteration, we can probably stop.
+        // If we want to be safe, we always loop back.
+        // Let's loop back for now to ensure "self-correcting" capability.
+      }
+
+      // If we have failures, we definitely loop back.
+    }
+
+    let finalResponse = lastPlan?.response || "Task completed, Sir.";
+
+    // If we ran tools, synthesize a final response using all results
+    if (observations.length > 0) {
+      this.statusCallback?.('Synthesizing final response...');
+      finalResponse = await this.planner.synthesizeFinalResponse(input, lastPlan!, allExecutionResults, fullContext);
+    }
     
     // Speak the response if callback is set
-    if (plan.response) {
-      this.speakInChunks(plan.response);
+    if (finalResponse) {
+      this.speakInChunks(finalResponse);
     }
 
     // Record history
-    this.contextManager.addHistory(input, { plan, results: executionResults });
+    this.contextManager.addHistory(input, { observations, response: finalResponse });
 
     return {
-      results: executionResults,
-      response: plan.response || "Task completed, sir."
+      results: allExecutionResults,
+      response: finalResponse
     };
   }
 

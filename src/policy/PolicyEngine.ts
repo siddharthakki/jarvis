@@ -1,6 +1,7 @@
 import { RiskLevel } from '../tools/ToolTypes';
 import { PermissionEvaluator, PolicyDecision } from './PermissionEvaluator';
 import { RiskClassifier } from './RiskClassifier';
+import { ToolRegistry } from '../tools/ToolRegistry';
 
 export { PolicyDecision };
 
@@ -11,7 +12,10 @@ export class PolicyEngine {
     toolName: string,
     args: Record<string, unknown>,
   ): { decision: PolicyDecision; riskLevel: RiskLevel; meta: Record<string, unknown> } {
-    let riskLevel = RiskClassifier.classifyTool(toolName);
+    const tool = ToolRegistry.get(toolName);
+    // Use tool registry riskLevel as base, fallback to classification or default
+    let riskLevel: RiskLevel = tool ? tool.riskLevel : RiskClassifier.classifyTool(toolName);
+
     const meta: Record<string, unknown> = {};
 
     if (toolName === 'run_command') {
